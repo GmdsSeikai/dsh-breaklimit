@@ -52,8 +52,16 @@ test('没有身份句的段原样返回同一个对象', () => {
   assert.equal(out, sections[0])
 })
 
-test('doctor 在服务缺席时报「宿主未提供」而不是不一致', async () => {
+test('doctor 在服务缺席时报「宿主未提供」而不是不一致', async (t) => {
   const { doctorReport } = await import('../src/host/commands.js')
+  // doctorReport 用 resolveHome() 读环境里的 DSH_HOME，不隔离就会读本机真实档位：
+  // 使用者把档位切到完全解放，这条断言就跟着飘红，而缺陷与档位无关。
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = tempHome()
+  t.after(() => {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  })
   const report = doctorReport({ get: () => undefined }, { hostRoot: '' })
   assert.match(report.text, /提示词模式\s+recommended/u)
   assert.match(report.text, /宿主未提供/u)
