@@ -1,0 +1,77 @@
+# 命令与 HTTP 接口
+
+## 宿主内命令
+
+| 命令 | 用途 |
+| --- | --- |
+| `/breaklimit`、`/breaklimit status` | 查看状态与预检结果 |
+| `/breaklimit apply` | 应用当前选择的补丁 |
+| `/breaklimit revert` | 回退已记录的宿主文件改动 |
+| `/breaklimit tier [recommended\|unrestricted]` | 查看或切换提示词模式；缺省为 `recommended` |
+| `/breaklimit on`、`/breaklimit off` | 开启或关闭本次插件实例的运行时接管；不撤销已应用补丁 |
+| `/breaklimit doctor` | 一条命令报告模式、执行层预算与补丁状态是否一致 |
+| `/breaklimit upgrade` | 逐条核对补丁声明里的原文是否还在宿主里，失配时给出定位 |
+| `/breaklimit diff` | 当前提示词正文与内置正文的差异 |
+| `/breaklimit import <路径>` | 把一份 AGENTS.md 导入成规则（不自动激活） |
+| `/breaklimit-rules`、`/breaklimit-rules list`、`/breaklimit-rules status` | 列出规则及激活状态 |
+| `/breaklimit-rules read <id>` | 读取规则 |
+| `/breaklimit-rules activate <id>` | 激活规则 |
+| `/breaklimit-rules deactivate` | 取消激活 |
+| `/breaklimit-rules delete <id>` | 删除指定规则 |
+| `/breaklimit-rules reset` | 清空规则并取消激活 |
+
+规则可在 Web 设置页创建、编辑和切换。
+
+## 模型工具
+
+| 工具 | 用途 |
+| --- | --- |
+| `breaklimit_status` | 查询状态、宿主根和补丁预检 |
+| `breaklimit_apply` | 预检并应用补丁 |
+| `breaklimit_revert` | 检查漂移并回退补丁 |
+| `breaklimit_guard` | 只读预检一个路径：文件数、总字节、是否在工作区内、是否 git 仓库、未提交项数 |
+
+## 独立 CLI
+
+可直接使用 `node src/cli.js`；已由包管理器链接命令时，也可使用 `breaklimit`：
+
+```text
+breaklimit --status
+breaklimit --apply
+breaklimit --revert
+breaklimit --tier [recommended|unrestricted]
+breaklimit --edit
+breaklimit --rules
+breaklimit --host-root <路径> --status
+breaklimit --help
+```
+
+`--edit` 打开自定义提示词文件，`--rules` 列出规则。`--host-root` 可与需要宿主根的动作组合使用；无动作参数时显示帮助。CLI 与宿主接口共用补丁引擎，但各进程的宿主根和 `DSH_HOME` 配置须保持一致。诊断用宿主内的 `/breaklimit doctor`；独立 CLI 没有对应开关。
+
+## HTTP 接口
+
+接口挂载在宿主已有 Web 服务的 `/breaklimit` 前缀下，不另开监听端口。路由清单如下：
+
+| 方法 | 路由 | 用途 |
+| --- | --- | --- |
+| GET | `/breaklimit/status` | 状态与预检结果；`GET /breaklimit` 同样返回状态 |
+| GET | `/breaklimit/patches` | 补丁清单与选择状态 |
+| POST | `/breaklimit/patches/enabled` | 设置单条补丁开关，请求字段为 `id`、`enabled` |
+| POST | `/breaklimit/apply` | 应用当前选择的补丁 |
+| POST | `/breaklimit/revert` | 回退宿主文件改动 |
+| GET | `/breaklimit/override` | 读取当前注入文本及文件状态 |
+| POST | `/breaklimit/override` | 保存用户注入文本，请求字段为 `text` |
+| GET | `/breaklimit/tier` | 查看模式 |
+| POST | `/breaklimit/tier` | 切换模式，请求字段为 `tier` |
+| POST | `/breaklimit/enabled` | 切换运行时接管，请求字段为 `enabled` |
+| POST | `/breaklimit/restart` | 返回手动重启命令，不自行重启宿主 |
+| GET | `/breaklimit/rules/status` | 规则列表及激活状态 |
+| GET | `/breaklimit/rules/read?id=<id>` | 读取指定规则 |
+| POST | `/breaklimit/rules/save` | 保存规则，JSON 包含 `id`、`text`，可带 `name`、`target` |
+| POST | `/breaklimit/rules/activate` | 按 `id` 激活规则；空对象或空 `id` 取消激活 |
+| POST | `/breaklimit/rules/delete` | 删除规则，请求字段为 `id` |
+| POST | `/breaklimit/rules/reset` | 清空规则并取消激活 |
+
+写请求须带 `Origin`，其 URL 的 host（含端口）须与请求头 `Host` 一致；读请求可省略 `Origin`，携带时也执行此校验。不满足校验的请求返回 403。写接口使用 JSON 请求体；响应字段为 `ok`、`code`、`message` 和可选的 `data`。操作并发或文件漂移返回 409；预检阻断和输入非法通常返回 400；写入或记录损坏等内部失败返回 500。
+
+未提供 `webServer` 服务的宿主组合不会挂载这些路由，状态中显示 `http.mounted: false`。Web 设置页的可用性取决于宿主加载的客户端与服务组合。

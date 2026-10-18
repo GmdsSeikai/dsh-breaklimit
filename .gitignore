@@ -1,0 +1,4 @@
+node_modules/
+*.bak
+*.log
+docs/inject-rewrite.local.md

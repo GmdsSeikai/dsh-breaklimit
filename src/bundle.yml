@@ -1,0 +1,107 @@
+# rumo-dsh-breaklimit 的装配补丁。
+#
+# 补丁是整块替换目标行的整个 config，不是字段合并
+# （宿主 web-app 层注释原文：A patch replaces the targeted row's whole config,
+#   so each row below restates every key it owns）。
+# 因此本文件凡是依赖某个键继续存在的行，都必须把该键显式写出。
+
+# 1) 宿主身份不在这里处理。
+#    理由有两层：这句话由 agent preset 的 persona 行产出（preset 层遮蔽 bundle 层），
+#    改这一行本来就管不到它；而 personaSuffix 里写 {{cwd}} 会在装配时抛
+#    `unknown prompt variable` —— 生产代码只注册 provider 与 model。
+#    去身份统一由 src/host/seams.js 在 system-prompt/assemble 之后完成。
+
+# 2) 审批策略设为 ask。
+#    这是审批层能被接管的前提：never 会在瀑布之前直接判驳，
+#    插件既收不到询问，也无从按当前档位区分放行与挡住。
+- id: approval
+  config:
+    policy: ask
+
+# 3) 权限预设表整表写出，三档一律 ask。
+#    档位切换会把审批策略改回 never，那会让插件失去所有询问；
+#    权限服务启动时还会校验「当前档位与审批策略必须匹配某个预设」，
+#    只改其中一项会让校验落空。
+- id: permission
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: ask
+
+# 4) 默认档位显式写出，不再依赖其它插件是否装着。
+#    workspaceRoot 在 schema 里没有默认值，必须一起写出，否则校验失败。
+- id: sandbox-policy
+  config:
+    mode: danger-full-access
+    workspaceRoot: !!js process.cwd()
+
+# 5) 关掉宿主的重复调用提醒。
+#    它挂在 tools/post-execute 上，把「同一个工具连续调用 N 次」的提醒塞进
+#    模型上下文，等于宿主主动往上下文里灌负向暗示。这一行在 base 层、
+#    web 模式下不被禁用，属于 host 平面，所以配置一行即可关掉。
+- id: repeat-tool-reminder
+  disabled: true
+
+# 5b) 执行层预算。这三项是 Volatile，插件侧没有写入通道，所以只能在装载时定。
+#     bash-sandbox 与 pwsh-sandbox 是同一套 config 的两个平台孪生：前者在 win32
+#     被禁用，后者只在 win32 挂载。两行都写，否则总有一个平台拿不到。
+#     maxTimeoutMs 必须与 timeoutMs 同抬：执行时取 min(timeoutMs, maxTimeoutMs)，
+#     只抬前者的实际效果仍是默认的 600000。
+#
+#     整块替换意味着这一行「拥有」config 的全部键：没写出来的键会回到 schema 默认，
+#     而不是继承更早层的取值。所以这里把宿主 schema 的 5 个键全部写出，值与宿主默认
+#     一致（packages/shell/bash-local/src/index.ts:101-106），只有我们真要抬的三项不同。
+#     cwd 不写：它没有 schema 默认值，省略即 process.cwd()，与写死的效果相同。
+#     maxSpillBytes 保持 64 MiB、graceMs 保持 3 秒——它们不卡输出保留量，没必要动。
+- id: bash-sandbox
+  config:
+    timeoutMs: 1200000
+    maxTimeoutMs: 1200000
+    maxOutputBytes: 524288
+    maxSpillBytes: 67108864
+    graceMs: 3000
+
+- id: pwsh-sandbox
+  config:
+    timeoutMs: 1200000
+    maxTimeoutMs: 1200000
+    maxOutputBytes: 524288
+    maxSpillBytes: 67108864
+    graceMs: 3000
+
+# 5c) 子代理递归深度。整块替换同样适用：宿主 subagent 的 Config 有 maxDepth 与
+#     maxActiveSubagents 两个键（packages/subagent/subagent/src/index.ts:196-197），
+#     只写前者的效果是把同层并发数静默压回 8。这里把两者都写出来：
+#     层数放开到 2（主代理 → 子代理 → 孙代理），同层并发保持宿主默认 8。
+#     与 0c3f638 修的是同一类缺陷——那次修的是运行时通道的合并，这里是声明层的。
+- id: subagent
+  config:
+    maxDepth: 2
+    maxActiveSubagents: 8
+
+# 6) 把自己插进层栈。
+#    hostRoot 填在这里，插件与命令行读的是同一处，填一次两处生效。
+#    留空时插件会从宿主进程推导（三个标记路径同时存在才认，认不出就报未配置），
+#    命令行不推导。两种取不到的情况都会如实报出来，而不是假装补丁已生效。
+#
+#    allowedHosts 是路由的 Host 栅栏。空数组表示用默认回环名单：
+#    127.0.0.1、localhost、[::1]，均允许带端口形式（127.0.0.1:3081 等）。
+#    宿主若绑定在非回环地址（局域网 IP，或用 --public-url 挂在反代域名后），
+#    浏览器发出的 Host 就不在默认名单里，会被 403 host_not_allowed 挡住；此时
+#    必须在这里显式写出访问用的主机名（可带端口，如 'nas.local:3081'），
+#    否则一律拒绝，不会静默放行。
+- insert:
+    - id: breaklimit
+      name: 'rumo-dsh-breaklimit'
+      config:
+        enabled: true
+        injectFile: ''
+        hostRoot: ''
+        allowedHosts: []

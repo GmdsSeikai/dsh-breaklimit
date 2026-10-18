@@ -1,0 +1,61 @@
+{
+  "name": "rumo-dsh-breaklimit",
+  "version": "0.9.0",
+  "description": "DeepSeek Harness 破限插件：严格补丁引擎（预哈希、命中数守卫、事务回滚）加上宿主自身的运行时接缝，两者职责不重叠。",
+  "type": "module",
+  "main": "./src/plugin.js",
+  "exports": {
+    ".": "./src/plugin.js",
+    "./client": "./src/client.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "breaklimit": "./src/cli.js"
+  },
+  "files": [
+    "src",
+    "tools",
+    "docs",
+    "DESIGN.md",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "lint": "node tools/lint-exports.mjs",
+    "check": "node tools/lint-exports.mjs && node tools/check-client.mjs && node --test && node tools/check-doc-numbers.mjs",
+    "check:host": "node tools/selfcheck.mjs",
+    "reconcile": "node tools/reconcile.mjs",
+    "fixture": "node tools/make-fixture.mjs",
+    "hashes": "node tools/collect-hashes.mjs"
+  },
+  "author": "Rumo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rumoii/dsh-breaklimit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rumoii/dsh-breaklimit/issues"
+  },
+  "homepage": "https://github.com/rumoii/dsh-breaklimit#readme",
+  "keywords": ["deepseek-harness", "dsh-plugin", "patch", "prompt", "rules"],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./src/bundle.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "dshTarget": "0.2.1-rc.2",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  }
+}

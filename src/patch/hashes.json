@@ -1,0 +1,30 @@
+{
+  "dsh": {
+    "version": "0.2.1-rc.2",
+    "commit": "687f282e8625c6b8d11ff58211a90524be2e4317"
+  },
+  "generatedAt": "2026-10-17T16:38:18.660Z",
+  "note": "由 tools/collect-hashes.mjs 从宿主 HEAD 生成。手工编辑会让预检与目标版本脱节。",
+  "files": {
+    "output.trim": {
+      "packages/bundle/web-app/presets/cordis.patch.yml": "sha256:01b0fc94fd49136b332254a7ae5658e43ffe646f7248047dba65d499cfc74596",
+      "packages/bundle/web-app/presets/standard.patch.yml": "sha256:0d398d2a6872a73a106cb3bd19303ecccf1637e1fcad4d0bf9d8a72d2c2c68f5",
+      "packages/bundle/web-app/presets/ptc.patch.yml": "sha256:9e355c947bf61c3d2fe9bf3214b386f83c0d99d37579ce22576d4b82cb6e1a2c"
+    },
+    "read.limits": {
+      "packages/fs/tool-fs/src/read.ts": "sha256:808d3018dbfb925dc223da25d5a7c7d30fd405b4aec121e895a35f374fee319d",
+      "packages/fs/tool-fs/src/read-render.ts": "sha256:72bcf4a70fd3e0908d4aa3869e0fbd6ee63b05ad790af65951af0c5db9edba84"
+    },
+    "minimal.unfreeze": {
+      "packages/bundle/web-app/presets/minimal.patch.yml": "sha256:a2a9ba1c9c392a45466708f18bc0aefbf300577f9b544dc06049f73a8a5b3267"
+    },
+    "web.framing": {
+      "packages/web/tool-web/src/fetch.ts": "sha256:dc192e9b26d4114704be77e3ce1cffd10c8b2cef611ff0f1b7455f4ba84c3ab0",
+      "packages/web/tool-web/src/search.ts": "sha256:7fa69d836cf682f0a6a3854f90e91cf4f746d90c91881fe92d11aeed5c66a2ee",
+      "packages/web/tool-web/src/trust.ts": "sha256:3d35bb98ca3b29a393a733fd19142bf3b4a58cf61e4c70ba475def0203e89061"
+    },
+    "workspace.authority": {
+      "packages/context/agent-instructions/src/render.ts": "sha256:98499e3e1b846dab4ca7158ad262e8067102464d51933948057918b944262cd3"
+    }
+  }
+}

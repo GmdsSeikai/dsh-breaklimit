@@ -1,0 +1,66 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repository:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        node: ['22.19.0', '24']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm run check
+      - run: npm pack --dry-run --ignore-scripts
+
+  host-fixture:
+    name: Fixed host fixture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: plugin
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: 687f282e8625c6b8d11ff58211a90524be2e4317
+          path: host
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # 固定提交必须与插件声明的目标一致，否则下一次升级时 reconcile 会静默红掉。
+      - name: Assert the pinned host commit matches DSH_TARGET
+        working-directory: plugin
+        run: |
+          node --input-type=module -e "
+          import { readFileSync } from 'node:fs'
+          const { DSH_TARGET } = await import('./src/patch/index.js')
+          const yml = readFileSync('.github/workflows/check.yml', 'utf8')
+          const pinned = yml.match(/repository: deepseek-ai\/deepseek-harness\s*\n\s*ref: ([0-9a-f]{40})/u)?.[1]
+          if (pinned === undefined) { console.error('check.yml 里找不到固定的 host ref'); process.exit(1) }
+          if (pinned !== DSH_TARGET.commit) {
+            console.error('check.yml 固定 ' + pinned + '，但 DSH_TARGET 声明 ' + DSH_TARGET.commit)
+            process.exit(1)
+          }
+          console.log('固定提交与声明一致:', pinned)
+          "
+      - run: npm run reconcile -- ../host
+        working-directory: plugin
+      - run: npm run check:host -- ../host
+        working-directory: plugin
