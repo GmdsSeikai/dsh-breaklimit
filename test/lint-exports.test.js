@@ -8,6 +8,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 
 import { checkSources, checkTree, collectExports, stripCommentsAndStrings } from '../tools/lint-exports.mjs'
 
@@ -91,7 +92,11 @@ test('再导出形式也被认作导出', () => {
 })
 
 test('检查真实仓库时通过', () => {
-  const root = path.join(path.dirname(new URL(import.meta.url).pathname.slice(1)), '..')
+  // 用 fileURLToPath 换路径，不手工截 `pathname`：在 POSIX 上 `/home/runner/...` 截掉
+  // 开头那个斜杠就成了相对路径 `home/runner/...`，readdir 会按当前目录去找并 ENOENT；
+  // Windows 上 `/D:/...` 恰好是能用的，所以这条缺陷只在 Linux 的 CI 上现形。
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
+  assert.ok(path.isAbsolute(root), `仓库根必须是绝对路径，否则会按当前目录解析：${root}`)
   const { problems } = checkTree(root)
   assert.deepEqual(problems, [], `仓库自身有接口不一致：\n${problems.join('\n')}`)
 })
