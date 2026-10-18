@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { EventEmitter } from 'node:events'
-import { createHandler } from '../src/serve/http.js'
+import { bodyLimitFor, createHandler } from '../src/serve/http.js'
 import { savedMessage } from '../src/host/status.js'
 
 function fixture(t, config = {}) {
@@ -124,9 +124,10 @@ test('300 KiB 正文保存成功：旧的 256 KiB 请求体上限不再把它拦
   assert.equal(fs.statSync(bodyPath(home, 'big')).size, Buffer.byteLength(text, 'utf8'))
 })
 
-test('超过派生上限的请求体：413 too_large，且不落盘', async (t) => {
+test('超过请求体上限：413 too_large，且不落盘', async (t) => {
   const { home, handler } = fixture(t)
-  const text = 'x'.repeat(1024 * 1024)
+  // 字面量 4 MiB：明显超过按 6 倍转义余量推导出的上限，也不等于任何一个实现常量。
+  const text = 'x'.repeat(4 * 1024 * 1024)
   const raw = JSON.stringify({ id: 'huge', name: '超大', target: 'AGENTS.md', text })
 
   const response = await requestRaw(handler, '/rules/save', raw)
@@ -137,6 +138,49 @@ test('超过派生上限的请求体：413 too_large，且不落盘', async (t) 
   assert.match(response.payload.message, /正文超过 \d+ 字节上限/)
   assert.equal(response.payload.message.includes(home), false)
   assert.equal(fs.existsSync(bodyPath(home, 'huge')), false)
+})
+
+test('上限体积的正文能装进请求体：控制字符按最坏转义算也进得来', async (t) => {
+  const { home, handler } = fixture(t)
+  // 524288 个控制字符：UTF-8 占 524288 字节，JSON 里展开成 3,145,790 字节的请求体。
+  // 旧的 min(1 MiB, 2 倍) 上限把它挡成 413；按 6 倍余量推导才装得下。
+  const text = String.fromCharCode(1).repeat(524288)
+
+  const response = await request(handler, 'POST', '/rules/save', {
+    id: 'escape',
+    name: '最坏转义',
+    target: 'AGENTS.md',
+    text,
+  })
+
+  assert.equal(response.status, 200)
+  assert.equal(response.payload.ok, true)
+  assert.equal(fs.statSync(bodyPath(home, 'escape')).size, 524288)
+})
+
+test('请求体放宽不等于正文上限放宽：多一个字节仍是 rule_invalid', async (t) => {
+  const { home, handler } = fixture(t)
+  const text = String.fromCharCode(1).repeat(524289)
+
+  const response = await request(handler, 'POST', '/rules/save', {
+    id: 'over',
+    name: '超一个字节',
+    target: 'AGENTS.md',
+    text,
+  })
+
+  assert.equal(response.status, 400)
+  assert.equal(response.payload.code, 'rule_invalid')
+  assert.match(response.payload.message, /上限/)
+  assert.equal(fs.existsSync(bodyPath(home, 'over')), false)
+})
+
+test('请求体上限按 6 倍转义余量推导，没有固定封顶', () => {
+  // 字面量：载荷 × 6 + 64 KiB。
+  assert.equal(bodyLimitFor(524288), 3211264)
+  assert.equal(bodyLimitFor(1024), 1024 * 6 + 65536)
+  // 载荷上限调大，请求体上限必须跟着涨。旧的 min(1 MiB, 载荷 × 2) 就是死在这一条上。
+  assert.ok(bodyLimitFor(4 * 1024 * 1024) > 4 * 1024 * 1024)
 })
 
 test('savedMessage 两支：同步与未同步，且不把落点标志当对象解引用', () => {

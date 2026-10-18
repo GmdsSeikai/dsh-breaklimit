@@ -18,10 +18,20 @@ import * as tiers from '../context/tiers.js'
 
 export const ROUTE_PREFIX = '/breaklimit'
 
-// 请求体上限从规则层的正文上限派生，HTTP 层不再另立一个数字：规则正文要装在 JSON
-// 字符串里，`"`、`\` 与换行会各占两个字节，因此给一倍的转义余量（同时盖住 id/name/
-// target 的字段开销），封顶 1 MiB。规则正文上限变了，这里跟着变。
-const MAX_BODY_BYTES = Math.min(1024 * 1024, rules.MAX_RULE_BYTES * 2)
+// 请求体上限由它所承载的最大载荷推导，HTTP 层不另立数字，也不设不随载荷变化的固定
+// 封顶——一旦封顶，调大规则正文上限就不再抬高清求体上限，合法正文会被 413 挡在门外。
+//
+// 转义余量按最坏情况算：JSON 字符串里的控制字符展开成 `\u00XX`，1 个 UTF-8 字节占
+// 6 个 ASCII 字符。信封余量盖住 id、name、target 与括号，实测 3.1 MB 的请求体里它只占
+// 62 字节。
+const JSON_ESCAPE_MAX = 6
+const ENVELOPE_BYTES = 64 * 1024
+
+/** 承载 payloadBytes 字节载荷所需的请求体上限。 */
+export function bodyLimitFor(payloadBytes) {
+  return payloadBytes * JSON_ESCAPE_MAX + ENVELOPE_BYTES
+}
+
 const TOO_LARGE = 'too_large'
 
 // Host 栅栏与 sec-fetch-site 判定。
@@ -123,10 +133,11 @@ function isSameOrigin(req, method) {
 }
 
 /**
- * 读请求体。超过 `MAX_BODY_BYTES` 时拒收，并在错误上打 `too_large` 标记，让路由层
- * 回 413 而不是把它当成内部错误——超限是调用方可以修正的处境，不是本方的故障。
+ * 读请求体。超过 `limit` 时拒收，并在错误上打 `too_large` 标记，让路由层回 413 而不是
+ * 把它当成内部错误——超限是调用方可以修正的处境，不是本方的故障。上限由调用方按本次
+ * 装载的配置算出，见 createHandler。
  */
-function readBody(req) {
+function readBody(req, limit) {
   return new Promise((resolve, reject) => {
     const chunks = []
     let size = 0
@@ -134,9 +145,9 @@ function readBody(req) {
     req.on('data', (chunk) => {
       if (rejected) return
       size += chunk.length
-      if (size > MAX_BODY_BYTES) {
+      if (size > limit) {
         rejected = true
-        const error = new Error(`正文超过 ${String(MAX_BODY_BYTES)} 字节上限`)
+        const error = new Error(`正文超过 ${String(limit)} 字节上限`)
         error.code = TOO_LARGE
         reject(error)
         return
@@ -251,7 +262,7 @@ function redactSettlement(settlement) {
   return { ...settlement, skipped }
 }
 
-function buildRoutes(ctx, config, runtime) {
+function buildRoutes(ctx, config, runtime, bodyLimit) {
   const home = () => resolveHome()
 
   const requireHostRoot = () => {
@@ -309,7 +320,7 @@ function buildRoutes(ctx, config, runtime) {
      * 还原，与此处的配置无关。幂等：把同一个状态设两次没有额外副作用。
      */
     'POST /patches/enabled': async (req) => {
-      const parsed = parseJsonBody(await readBody(req))
+      const parsed = parseJsonBody(await readBody(req, bodyLimit))
       if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
       if (typeof parsed.id !== 'string' || typeof parsed.enabled !== 'boolean') {
         return envelope(400, 'invalid_request', '需要 id 字符串与 enabled 布尔值。')
@@ -355,7 +366,7 @@ function buildRoutes(ctx, config, runtime) {
     },
 
     'POST /override': async (req) => {
-      const raw = await readBody(req)
+      const raw = await readBody(req, bodyLimit)
       const parsed = parseJsonBody(raw)
       if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
       if (typeof parsed.text !== 'string') {
@@ -386,7 +397,7 @@ function buildRoutes(ctx, config, runtime) {
     },
 
     'POST /tier': async (req) => {
-      const raw = await readBody(req)
+      const raw = await readBody(req, bodyLimit)
       const parsed = parseJsonBody(raw)
       if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
       if (typeof parsed.tier !== 'string' || !tiers.isValidTier(parsed.tier)) {
@@ -439,7 +450,7 @@ function buildRoutes(ctx, config, runtime) {
     },
 
     'POST /rules/save': async (req) => {
-      const parsed = parseJsonBody(await readBody(req))
+      const parsed = parseJsonBody(await readBody(req, bodyLimit))
       if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
       const saved = rules.saveRule(home(), parsed.id, parsed.text, { name: parsed.name, target: parsed.target })
       if (!saved.ok) return envelope(400, 'rule_invalid', saved.reason)
@@ -459,7 +470,7 @@ function buildRoutes(ctx, config, runtime) {
 
     // 带 id 激活那一条；不带 id 表示取消激活。
     'POST /rules/activate': async (req) => {
-      const parsed = parseJsonBody(await readBody(req))
+      const parsed = parseJsonBody(await readBody(req, bodyLimit))
       if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
       if (typeof parsed.id !== 'string' || parsed.id === '') {
         const cleared = rules.deactivateRule(home())
@@ -498,7 +509,7 @@ function buildRoutes(ctx, config, runtime) {
     },
 
     'POST /rules/delete': async (req) => {
-      const parsed = parseJsonBody(await readBody(req))
+      const parsed = parseJsonBody(await readBody(req, bodyLimit))
       if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
       const done = rules.deleteRule(home(), parsed.id)
       if (!done.ok) return envelope(400, 'rule_invalid', done.reason)
@@ -519,7 +530,7 @@ function buildRoutes(ctx, config, runtime) {
     // 接管开关的前端入口。与命令面板的 on/off 等价，幂等：把同一个值设两次
     // 没有任何额外副作用。
     'POST /enabled': async (req) => {
-      const parsed = parseJsonBody(await readBody(req))
+      const parsed = parseJsonBody(await readBody(req, bodyLimit))
       if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
       if (typeof parsed.enabled !== 'boolean') {
         return envelope(400, 'invalid_enabled', '需要 enabled 字段且为布尔值。')
@@ -533,7 +544,9 @@ function buildRoutes(ctx, config, runtime) {
 }
 
 export function createHandler(ctx, config, runtime) {
-  const routes = buildRoutes(ctx, config, runtime)
+  // 上限按本次装载的配置算一次：规则正文与注入上限都要装得下，后者可配置。
+  const bodyLimit = bodyLimitFor(Math.max(rules.MAX_RULE_BYTES, maxInjectBytes(config)))
+  const routes = buildRoutes(ctx, config, runtime, bodyLimit)
 
   return async function handler(req, res) {
     try {
