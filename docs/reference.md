@@ -65,6 +65,8 @@ breaklimit --help
 | POST | `/breaklimit/tier` | 切换模式，请求字段为 `tier` |
 | POST | `/breaklimit/enabled` | 切换运行时接管，请求字段为 `enabled` |
 | POST | `/breaklimit/restart` | 返回手动重启命令，不自行重启宿主 |
+| GET | `/breaklimit/alias` | 读取目标词表、上限与最近一次命中 |
+| PUT | `/breaklimit/alias` | 整表覆盖写词表，请求字段为 `entries`，每项含 `from`、`to` |
 | GET | `/breaklimit/rules/status` | 规则列表及激活状态 |
 | GET | `/breaklimit/rules/read?id=<id>` | 读取指定规则 |
 | POST | `/breaklimit/rules/save` | 保存规则，JSON 包含 `id`、`text`，可带 `name`、`target` |
@@ -75,3 +77,5 @@ breaklimit --help
 写请求须带 `Origin`，其 URL 的 host（含端口）须与请求头 `Host` 一致；读请求可省略 `Origin`，携带时也执行此校验。不满足校验的请求返回 403。写接口使用 JSON 请求体；响应字段为 `ok`、`code`、`message` 和可选的 `data`。操作并发或文件漂移返回 409；预检阻断和输入非法通常返回 400；写入或记录损坏等内部失败返回 500。请求体超过上限返回 413 `too_large`：上限按所承载载荷（规则正文与注入正文）的 6 倍 JSON 转义余量推导，不设固定封顶，所以正文上限调大后请求体上限跟着涨；正文本身超限仍是 400 `rule_invalid`，两者不是同一件事。
 
 未提供 `webServer` 服务的宿主组合不会挂载这些路由，状态中显示 `http.mounted: false`。Web 设置页的可用性取决于宿主加载的客户端与服务组合。
+
+目标词表存在 `$DSH_HOME/breaklimit/masks.json`：最多 100 条，每条 `from` 与 `to` 各不超过 64 字符，`from` 等于 `to` 的条目被丢弃。替换只在请求交付给模型之前作用于用户消息，精确字面匹配、长词优先；词表为空时不做任何替换。改完词表需要新开会话才生效。
