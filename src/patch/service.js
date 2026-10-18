@@ -50,14 +50,17 @@ export function inspectPatches({ root, home, mode = 'recommended' }) {
       appliedRecords[target] = { before: record.before, after: record.after, declaration: record.declaration, declarations: record.declarations }
     }
   }
+  // 判用的补丁集与还原用的变体必须是同一份：变体取自默认声明时，调用方按档解析过的
+  // 那份列表与它对不上，legacy 记录的还原会退化成空操作。
+  const patches = resolvePatches(home, mode)
   const result = preflight({
     root,
-    patches: resolvePatches(home, mode),
+    patches,
     readFile: readTextOrNull,
     hashes: PATCH_HASHES,
     appliedRecords,
     // 旧记录没有指纹时，预检要靠全档变体把磁盘内容还原成原文才能判断哪一档写的。
-    variantsByPath: replaceVariantsByPath(),
+    variantsByPath: replaceVariantsByPath(patches),
   })
   // applied_other 并进 blocked，但单独计数：它要说明的是「先回退」，不是「宿主被改过」。
   const modeMismatchFiles = result.findings.filter(item => item.state === 'applied_other').length

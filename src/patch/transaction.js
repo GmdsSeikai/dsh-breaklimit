@@ -240,7 +240,9 @@ export function applyPatches({
       hashes,
       appliedRecords,
       // 旧记录没有指纹时，预检要靠全档变体把磁盘内容还原成原文才能判断哪一档写的。
-      variantsByPath: replaceVariantsByPath(),
+      // 变体必须与本批声明同源：拿默认补丁集算，调用方自带声明时这条路径就没有变体，
+      // 还原退化成空操作，另一档写下的内容会被判成「已应用」。
+      variantsByPath: replaceVariantsByPath(patches),
     })
     // 目标路径 → 本批在这个路径上用到的**全部**声明指纹。同一文件可能被两条 replace
     // 目标命中（读取上限与单行长度就落在同一个文件里），只记最后一条会让另一个目标

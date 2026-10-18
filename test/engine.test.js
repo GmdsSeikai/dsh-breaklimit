@@ -725,3 +725,47 @@ test('回退成功后仍能重新应用，清理没有破坏状态链', () => {
   assert.equal(read(root, 'a.txt'), 'const VALUE = 2000\n')
   assert.equal(apply(root, home, patches).ok, true)
 })
+
+test('自定义声明集：另一档写下的内容不算已应用，按当前档重写', () => {
+  const root = tempDir()
+  const home = tempDir()
+  const pristine = 'head\nA1\ntail\n'
+  const diskText = pristine.split('A1').join('A3')
+  write(root, 'a.txt', diskText)
+
+  // 声明集是调用方给的，路径 a.txt 不在 PATCHES 里：默认补丁集给不出这条路径的变体，
+  // 还原必须用本批声明的两个档位（A2 / A3），否则认不出磁盘上那一版是另一档写的。
+  const patches = [{
+    id: 'T-A',
+    title: '测试补丁',
+    kind: 'replace',
+    targets: [{
+      path: 'a.txt',
+      before: 'A1',
+      after: 'A2',
+      afterByMode: { unrestricted: 'A3' },
+      expectHits: 1,
+    }],
+  }]
+
+  // 旧记录：只有应用后哈希，没有声明指纹。
+  const dir = path.join(home, 'breaklimit')
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify({
+    version: 1,
+    operationId: 'tx-test',
+    phase: 'committed',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    files: { 'a.txt': { after: hashText(diskText) } },
+  }), 'utf8')
+
+  const result = apply(root, home, patches, {
+    // 预哈希必须是原文的，不能按磁盘现状现算：那等于把「磁盘即原文」写进证据。
+    hashes: { 'T-A': { 'a.txt': hashText(pristine) } },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.findings[0].state, 'needs_reapply')
+  assert.equal(result.code, 'applied')
+  assert.equal(read(root, 'a.txt'), pristine.split('A1').join('A2'))
+})
