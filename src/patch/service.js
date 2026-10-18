@@ -25,7 +25,9 @@ function blockedMessage(modeMismatch, conflicts) {
   return `预检阻断：${parts.join('；')}。`
 }
 
-export function inspectPatches({ root, home, mode = 'recommended' }) {
+// 判定用哪份清单由调用方决定：插件派发路径用随包的 PATCH_HASHES，拿合成宿主做判定的
+// 工具与测试显式传入同一份合成清单——预哈希与实际文本必须互相印证，掺着用就是伪证据。
+export function inspectPatches({ root, home, mode = 'recommended', hashes = PATCH_HASHES }) {
   const state = readState(home)
   if (!root) {
     return { state, preflight: {
@@ -57,7 +59,7 @@ export function inspectPatches({ root, home, mode = 'recommended' }) {
     root,
     patches,
     readFile: readTextOrNull,
-    hashes: PATCH_HASHES,
+    hashes,
     appliedRecords,
     // 旧记录没有指纹时，预检要靠全档变体把磁盘内容还原成原文才能判断哪一档写的。
     variantsByPath: replaceVariantsByPath(patches),

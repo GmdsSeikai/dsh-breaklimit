@@ -176,6 +176,29 @@ test('指纹集合里没有当前声明：仍判 applied_other 并阻断', () =>
   assert.equal(result.findings[0].state, 'applied_other')
 })
 
+test('旧记录无指纹、声明已漂移：还原结果对不上预哈希，不放行', () => {
+  const root = tempDir()
+  write(root, 'a.txt', 'KEPT\n')
+
+  // 记录说这份内容确实是本方写的（应用后哈希相符），但当前声明里的两段文本在磁盘上
+  // 都不存在：还原撤不出声明的原文，正推也改不动任何字节。只看「正推等于原文」的话，
+  // 它自己等于自己，声明漂移就被当成「已应用」放过去了。
+  const target = { path: 'a.txt', before: 'OLDLINE', after: 'NEWLINE', expectHits: 1 }
+  const result = preflight({
+    root,
+    patches: [{ id: 'T-A', title: '测试补丁', kind: 'replace', targets: [target] }],
+    readFile: readOrNull,
+    hashes: { 'T-A': { 'a.txt': hashText('PRISTINE\n') } },
+    appliedRecords: { 'a.txt': { after: hashText('KEPT\n') } },
+    variantsByPath: new Map([['a.txt', [{ before: 'OLDLINE', after: 'NEWLINE' }]]]),
+  })
+
+  assert.equal(result.ok, false)
+  assert.notEqual(result.findings[0].state, 'applied')
+  assert.equal(result.changes.size, 0)
+  assert.equal(result.blocked.length, 1)
+})
+
 /** read-render.ts 的路径，从声明里取，避免把宿主路径写死在测试里。 */
 function targetsPathOfReadRender() {
   const patch = PATCHES.find(item => item.id === 'read.limits')

@@ -129,12 +129,13 @@ function judgeReplace(target, original, current, expectedHash, applied, declared
       return { state: 'applied', hits: 0, expected, reason: '内容等于本方写入的版本' }
     }
 
-    // 旧记录没有指纹：直接问「按当前声明把这份文件重做一遍，结果是不是就是磁盘这一
-    // 版」。还原要用**全部档位**的变体，因为磁盘上可能是另一档写的；正推只用当前档。
-    // 不用哈希基准：正推结果与磁盘内容逐字节相等，本身就是最直接的证据。
+    // 旧记录没有指纹：两条都要成立才算已应用。还原出的内容必须真的是声明的那份原文
+    // （整文件预哈希对账，与 tools/rebuild-state.mjs 的采纳判据同一条），按当前档正推
+    // 必须逐字节等于磁盘这一版。只看后者不够——声明漂移、正推又恰好是空操作时，它自己
+    // 等于自己，等于把「没有证据」当成证据。
     const rebuilt = revertSnippets(original, variants)
     const forward = applySnippets(rebuilt, forwardTargets)
-    if (forward === original) {
+    if (hashText(rebuilt) === expectedHash && forward === original) {
       return { state: 'applied', hits: 0, expected, reason: '内容等于本方写入的版本' }
     }
     return {

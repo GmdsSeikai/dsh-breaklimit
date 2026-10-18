@@ -218,12 +218,14 @@ test('没有应用记录时行为不变：命中数正确判待应用，不符�
   assert.equal(conflict.changes.size, 0)
 })
 
-test('旧调用方只传 appliedHashes 字符串：不抛错，行为等同命中', () => {
+test('旧调用方只传 appliedHashes 字符串：不抛错，也不再声称已应用', () => {
   const root = tempDir()
   const trim = trimCase()
   const pristine = `head\n${trim.before}\ntail\n`
   write(root, trim.path, pristine)
-  // 记录是推荐档写的，当前声明在完全解放档：只有字符串哈希时无从判断按哪份声明写的。
+  // 记录是推荐档写的，当前声明在完全解放档：只有字符串哈希、又没有全档变体，
+  // 还原不出声明的原文，也就无从判断按哪份声明写的。判据不成立时宁可阻断，
+  // 不拿「正向改写恰好没改动任何字节」当已应用的证据。
   const appliedText = pristine.split(trim.before).join(trim.target('recommended').after)
   write(root, trim.path, appliedText)
 
@@ -235,8 +237,10 @@ test('旧调用方只传 appliedHashes 字符串：不抛错，行为等同命�
     appliedHashes: { [trim.path]: hashText(appliedText) },
   })
 
-  assert.equal(result.ok, true)
-  assert.equal(result.findings[0].state, 'applied')
+  assert.equal(result.findings[0].state, 'conflict')
+  assert.equal(result.ok, false)
+  assert.equal(result.changes.size, 0)
+  assert.equal(result.blocked.length, 1)
 })
 
 test('记录缺声明指纹（旧记录）且档位已切：判 needs_reapply，不谎报已应用', () => {
@@ -282,7 +286,15 @@ test('真实宿主的记录形状（只有 before/after）在推荐档下全部�
   }
   writeState(home, files)
 
-  const { preflight: pre } = inspectPatches({ root, home, mode: 'recommended' })
+  // 预哈希必须与自己铺的这份合成宿主对得上：真实 hashes.json 记的是宿主原文的哈希，
+  // 拿它去判合成文本，旧记录那条判据永远还原不出声明的原文。
+  const hashes = {}
+  for (const patch of patches) {
+    hashes[patch.id] = {}
+    for (const target of patch.targets) hashes[patch.id][target.path] = hashText(pristine.get(target.path))
+  }
+
+  const { preflight: pre } = inspectPatches({ root, home, mode: 'recommended', hashes })
 
   assert.equal(pre.ok, true)
   assert.equal(pre.code, 'ok')
