@@ -3,7 +3,7 @@
 // 只有两档：recommended（推荐）与 unrestricted（完全解放）。正文由三部分拼成：
 //   inject.md          两档共用的正文（用户可覆盖）
 //   recommended.md / unrestricted.md  各自的附加段
-//   tail.md            两档共用的尾部（装配在 8999，见 host/seams.js）
+//   tail.md            两档共用的尾部（序号由 config.order 决定，默认 8999）
 //
 // 档位配置保存在 $DSH_HOME/breaklimit/tier.json；旧值 lean / architect / autonomous
 // 一律回退到默认，不迁移、不猜测。

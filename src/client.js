@@ -583,6 +583,21 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       errServerNext: "点「重新检查」；反复出现，请把错误代码报给作者。",
       errUnknown: "操作没有成功",
       errUnknownNext: "点「重新检查」看看当前状态；反复出现，请把错误代码报给作者。",
+      aliasTitle: "目标词表",
+      aliasDesc: "这里配的词会在请求发出前替换回原文里的真实目标名换成占位名。",
+      aliasStateEmpty: "词表未配置",
+      aliasStateFailed: "词表读取失败",
+      aliasStateMiss: "本轮未替换",
+      aliasStateHit: (n) => `词表 ${String(n)} 条`,
+      aliasLoading: "词表读取中…",
+      aliasEmptyList: "暂无条目",
+      aliasFrom: "原词",
+      aliasTo: "替换成",
+      aliasAdd: "添加",
+      aliasRemove: "删除",
+      aliasFoot: "改动只对之后的新会话生效",
+      aliasSaveFailed: "保存失败，改动没有生效",
+      aliasClose: "关闭",
     },
     en: {
       nav: "Breaklimit",
@@ -896,6 +911,21 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       errServerNext: "Press Check again. If it keeps happening, report the error code to the author.",
       errUnknown: "The action did not succeed",
       errUnknownNext: "Press Check again to see the current state. If it keeps happening, report the error code to the author.",
+      aliasTitle: "Target words",
+      aliasDesc: "Words listed here replace the real target name in your message before it reaches the model.",
+      aliasStateEmpty: "Word list empty",
+      aliasStateFailed: "Word list unavailable",
+      aliasStateMiss: "No swaps this turn",
+      aliasStateHit: (n) => `Word list: ${String(n)}`,
+      aliasLoading: "Reading word list…",
+      aliasEmptyList: "No entries yet",
+      aliasFrom: "Word",
+      aliasTo: "Replace with",
+      aliasAdd: "Add",
+      aliasRemove: "Remove",
+      aliasFoot: "Changes apply to new sessions only",
+      aliasSaveFailed: "Save failed; nothing changed",
+      aliasClose: "Close",
     },
   }
 
@@ -962,6 +992,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
   const get = (path) => request(path, { method: "GET" })
   const post = (path, body) => request(path, { method: "POST", body: JSON.stringify(body ?? {}) })
+  const put = (path, body) => request(path, { method: "PUT", body: JSON.stringify(body ?? {}) })
 
   /** 错误码翻译成一句话 + 一个下一步。永远不展示后端 message 或原始 JSON。 */
   function explain(error) {
@@ -2345,6 +2376,318 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       h("div", { id: `bkl-panel-${tab}`, role: "tabpanel", "aria-labelledby": `bkl-tab-${tab}`, style: S.panel }, body))
   }
 
+  // ---- 目标词表：输入框上方的常驻行 -----------------------------------------
+  //
+  // 位置由宿主的 `conversation.composer.dock` 提供：输入框卡片下方、全局唯一，
+  // 一轮对话只出现一次，不会随消息条数堆积。
+  //
+  // 这一行只负责「让人找到入口」和「编辑词表」。替换发生在宿主侧的 step 之前，
+  // 与这里无关，所以改完必须新开会话才生效——这条写进了面板底部。
+
+  const ALIAS = {
+    // 跟输入框卡片同宽同位置：宿主给卡片的是
+    // min(卡片宽 + 2×side-clearance, 100%) 居中，这一行照抄，否则会贴到聊天区最左边。
+    root: {
+      position: "relative",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      width: "min(calc(var(--dsh-composer-card-max-width) + 2 * var(--dsh-composer-side-clearance)), 100%)",
+      margin: "0 auto",
+      padding: "0 var(--dsh-composer-side-clearance)",
+      boxSizing: "border-box",
+      minHeight: 26,
+    },
+    // 实底 + 实边：颜色全部走 tk（宿主的真实令牌名），不手写变量名。
+    // 之前写成 --dsw-alias-fill / --dsw-alias-label-2 这两个名字不存在，
+    // 背景和边框一起失效，看起来就是透明的。
+    row: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      margin: 0,
+      padding: "0 10px",
+      height: 24,
+      border: `1px solid ${tk.line2}`,
+      background: tk.layer1,
+      textAlign: "left",
+      font: "inherit",
+      fontSize: 12,
+      lineHeight: "22px",
+      color: tk.label2,
+      borderRadius: 6,
+      cursor: "pointer",
+      maxWidth: 200,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+    },
+    panel: {
+      position: "absolute",
+      left: 0,
+      bottom: "calc(100% + 8px)",
+      zIndex: 40,
+      boxSizing: "border-box",
+      width: 340,
+      maxWidth: "calc(100vw - 32px)",
+      padding: 16,
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+      border: `1px solid ${tk.line2}`,
+      borderRadius: 6,
+      background: tk.layer1,
+      color: tk.label,
+      fontSize: 13,
+      boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+    },
+    head: { display: "flex", alignItems: "center", justifyContent: "space-between" },
+    title: { margin: 0, fontSize: 13, fontWeight: 600, color: tk.label },
+    close: {
+      width: 24,
+      height: 24,
+      padding: 0,
+      border: "none",
+      borderRadius: 6,
+      background: "transparent",
+      font: "inherit",
+      fontSize: 14,
+      lineHeight: "24px",
+      color: tk.label2,
+      cursor: "pointer",
+    },
+    desc: { margin: 0, fontSize: 12, lineHeight: "16px", color: tk.label2 },
+    list: {
+      margin: 0,
+      padding: 0,
+      listStyle: "none",
+      maxHeight: 220,
+      overflowY: "auto",
+      border: `1px solid ${tk.line1}`,
+      borderRadius: 6,
+    },
+    item: { display: "flex", alignItems: "center", gap: 8, padding: "0 8px", minHeight: 32 },
+    itemDivider: { borderTop: `1px solid ${tk.line1}` },
+    pair: {
+      flex: 1,
+      minWidth: 0,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      fontSize: 13,
+      color: tk.label,
+    },
+    arrow: { margin: "0 6px", color: tk.label2 },
+    emptyItem: { padding: 10, fontSize: 12, color: tk.label2 },
+    remove: {
+      flexShrink: 0,
+      padding: "0 6px",
+      border: "none",
+      borderRadius: 6,
+      background: "transparent",
+      font: "inherit",
+      fontSize: 12,
+      lineHeight: "24px",
+      color: tk.label2,
+      cursor: "pointer",
+    },
+    form: { display: "flex", gap: 8 },
+    input: {
+      flex: 1,
+      minWidth: 0,
+      boxSizing: "border-box",
+      height: 30,
+      padding: "0 8px",
+      border: `1px solid ${tk.line2}`,
+      borderRadius: 6,
+      background: tk.well,
+      font: "inherit",
+      fontSize: 13,
+      color: tk.label,
+    },
+    add: {
+      flexShrink: 0,
+      height: 30,
+      padding: "0 14px",
+      border: `1px solid ${tk.line2}`,
+      borderRadius: 6,
+      background: tk.layer1,
+      font: "inherit",
+      fontSize: 13,
+      color: tk.label,
+      cursor: "pointer",
+    },
+    addOff: { opacity: 0.5, cursor: "not-allowed" },
+    foot: { margin: 0, fontSize: 12, color: tk.label2 },
+    fail: { margin: 0, fontSize: 12, color: tk.error },
+  }
+
+  function AliasRow() {
+    const [entries, setEntries] = useState([])
+    const [lastHits, setLastHits] = useState(0)
+    const [phase, setPhase] = useState("loading")
+    const [open, setOpen] = useState(false)
+    const [fromInput, setFromInput] = useState("")
+    const [toInput, setToInput] = useState("")
+    const [saving, setSaving] = useState(false)
+    const [saveFailed, setSaveFailed] = useState(false)
+    const rootRef = useRef(null)
+    const aliveRef = useRef(true)
+
+    const load = useCallback(async () => {
+      try {
+        const payload = await get("/alias")
+        if (!aliveRef.current) return
+        const data = payload?.data ?? {}
+        setEntries(Array.isArray(data.entries) ? data.entries : [])
+        setLastHits(Number(data.lastHits) || 0)
+        setPhase("ready")
+      } catch {
+        if (!aliveRef.current) return
+        setPhase("failed")
+      }
+    }, [])
+
+    useEffect(() => {
+      aliveRef.current = true
+      void load()
+      return () => { aliveRef.current = false }
+    }, [load])
+
+    useEffect(() => {
+      if (open) void load()
+    }, [open, load])
+
+    useEffect(() => {
+      if (!open) return
+      const onPointerDown = (event) => {
+        if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false)
+      }
+      const onKeyDown = (event) => {
+        if (event.key === "Escape") setOpen(false)
+      }
+      document.addEventListener("mousedown", onPointerDown)
+      document.addEventListener("keydown", onKeyDown)
+      return () => {
+        document.removeEventListener("mousedown", onPointerDown)
+        document.removeEventListener("keydown", onKeyDown)
+      }
+    }, [open])
+
+    const commit = async (next) => {
+      setSaving(true)
+      setSaveFailed(false)
+      try {
+        const payload = await put("/alias", { entries: next })
+        const data = payload?.data ?? {}
+        setEntries(Array.isArray(data.entries) ? data.entries : next)
+      } catch {
+        setSaveFailed(true)
+      } finally {
+        setSaving(false)
+      }
+    }
+
+    const from = fromInput.trim()
+    const to = toInput.trim()
+    const canAdd = from !== "" && to !== "" && !saving
+
+    const add = () => {
+      if (!canAdd) return
+      const exists = entries.some((entry) => entry.from === from)
+      const next = exists
+        ? entries.map((entry) => (entry.from === from ? { from, to } : entry))
+        : entries.concat([{ from, to }])
+      setFromInput("")
+      setToInput("")
+      void commit(next)
+    }
+
+    const removeAt = (index) => {
+      void commit(entries.filter((_, i) => i !== index))
+    }
+
+    const onKeyDown = (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault()
+        add()
+      }
+    }
+
+    const statusText = () => {
+      if (phase === "loading") return T.aliasLoading
+      // 读不到和「没有条目」是两件事：前者是请求没通，后者是真的没配。
+      // 混成一个文案会让人以为词表空了，实际是接口没响应。
+      if (phase === "failed") return T.aliasStateFailed
+      if (entries.length === 0) return T.aliasStateEmpty
+      if (lastHits === 0) return T.aliasStateMiss
+      return T.aliasStateHit(entries.length)
+    }
+
+    return h("div", { ref: rootRef, style: ALIAS.root },
+      h("button", {
+        type: "button",
+        style: ALIAS.row,
+        "aria-haspopup": "dialog",
+        "aria-expanded": open ? "true" : "false",
+        title: T.aliasTitle,
+        onClick: () => { setOpen((value) => !value) },
+      }, statusText()),
+      open
+        ? h("div", { role: "dialog", "aria-label": T.aliasTitle, style: ALIAS.panel },
+            h("div", { style: ALIAS.head },
+              h("h3", { style: ALIAS.title }, T.aliasTitle),
+              h("button", {
+                type: "button",
+                style: ALIAS.close,
+                "aria-label": T.aliasClose,
+                onClick: () => { setOpen(false) },
+              }, "\u00D7")),
+            h("p", { style: ALIAS.desc }, T.aliasDesc),
+            h("ul", { style: ALIAS.list },
+              entries.length === 0
+                ? h("li", { style: ALIAS.emptyItem }, T.aliasEmptyList)
+                : entries.map((entry, index) => h("li", {
+                    key: `${String(index)}:${entry.from}`,
+                    style: index === 0 ? ALIAS.item : merge(ALIAS.item, ALIAS.itemDivider),
+                  },
+                  h("span", { style: ALIAS.pair, title: `${entry.from} \u2192 ${entry.to}` },
+                    entry.from,
+                    h("span", { style: ALIAS.arrow }, "\u2192"),
+                    entry.to),
+                  h("button", {
+                    type: "button",
+                    style: ALIAS.remove,
+                    onClick: () => { removeAt(index) },
+                  }, T.aliasRemove)))),
+            h("div", { style: ALIAS.form },
+              h("input", {
+                style: ALIAS.input,
+                placeholder: T.aliasFrom,
+                "aria-label": T.aliasFrom,
+                value: fromInput,
+                onChange: (event) => { setFromInput(event.target.value) },
+                onKeyDown,
+              }),
+              h("input", {
+                style: ALIAS.input,
+                placeholder: T.aliasTo,
+                "aria-label": T.aliasTo,
+                value: toInput,
+                onChange: (event) => { setToInput(event.target.value) },
+                onKeyDown,
+              }),
+              h("button", {
+                type: "button",
+                style: canAdd ? ALIAS.add : merge(ALIAS.add, ALIAS.addOff),
+                disabled: canAdd ? undefined : true,
+                onClick: add,
+              }, T.aliasAdd)),
+            saveFailed ? h("p", { style: ALIAS.fail }, T.aliasSaveFailed) : null,
+            h("p", { style: ALIAS.foot }, T.aliasFoot))
+        : null)
+  }
+
   function apply(ctx) {
     refreshText()
     ctx.slots.inject("settings.section", () => ctx.slots.register({
@@ -2354,6 +2697,16 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       // 侧栏名称的取值早于 Section 挂载，这里同样先同步一次语言。
       label: () => { refreshText(); return T.nav },
     }, Section))
+
+    // 挂在输入框卡片上方、聊天区下方的整行区，与底部统计行同属底部区域。
+    // composer.dock 是单行 flex 且不换行，进去只能和统计字并排，做不出「独立一行」。
+    // 容器给足高度：只挂一个 inline chip 时父级 flex 可能把它压成 0 高。
+    ctx.slots.inject("conversation.input.dock", () => ctx.slots.register({
+      name: "conversation.input.dock",
+      id: "breaklimit-alias",
+      order: 10,
+      label: () => { refreshText(); return T.aliasTitle },
+    }, AliasRow))
   }
 
   exports.name = name

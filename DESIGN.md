@@ -19,7 +19,7 @@
 
 ## 提示词装配
 
-头部 = `inject.md`（用户可覆盖）+ 该模式的 `recommended.md` / `unrestricted.md` + 激活中的规则，折进宿主 `deployment:persona-prefix` 段；尾部 = `tail.md`，独占一段，序号 **8999**（在宿主全部原生段之后、结构化输出之前）。组合里没有 persona 前缀段时补一个 `breaklimit:head` 兜底，声明序号 1；落点不靠序号决定——宿主排序发生在装配瀑布之前，之后不再排序，所以兜底段按数组下标插到首位。
+头部 = `inject.md`（用户可覆盖）+ 该模式的 `recommended.md` / `unrestricted.md` + 激活中的规则，折进宿主 `deployment:persona-prefix` 段；尾部 = `tail.md`，独占一段，序号由 `config.order` 决定：缺省 **8999**，装机配置里设 **10300**。宿主第一方段的顺序是结构化输出 9900、harness 源码 10000、Web 表层 10100、`deployment:persona-suffix` 10200，所以 8999 落在它们之前、10300 落在全部原生段之后。组合里没有 persona 前缀段时补一个 `breaklimit:head` 兜底，声明序号 1；落点不靠序号决定——宿主排序发生在装配瀑布之前，之后不再排序，所以兜底段按数组下标插到首位。
 
 两档：`recommended`（推荐，默认）与 `unrestricted`（完全解放）。旧值 `lean` / `architect` / `autonomous` 判非法并回退默认，不迁移。
 

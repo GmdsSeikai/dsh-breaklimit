@@ -6,6 +6,7 @@ import test from 'node:test'
 test('设置页分区方向键同步移动键盘焦点', () => {
   let registration
   let component
+  let dock
   let focused
   const react = {
     createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
@@ -29,7 +30,12 @@ test('设置页分区方向键同步移动键盘焦点', () => {
     effect(fn) { fn() },
     slots: {
       inject(_name, fn) { fn() },
-      register(_metadata, value) { component = value },
+      register(metadata, value) {
+        // 一个 factory 现在会注册两个落点：设置分区与输入框下方的词表行。
+        // 按 name 取，不靠注册顺序，否则后注册的那个会把前一个顶掉。
+        if (metadata?.name === 'settings.section') component = value
+        else if (metadata?.name === 'conversation.input.dock') dock = value
+      },
     },
   })
   const tabs = []
@@ -51,4 +57,7 @@ test('设置页分区方向键同步移动键盘焦点', () => {
   key(0, 'ArrowLeft', 'context')
   key(1, 'Home', 'overview')
   key(1, 'End', 'context')
+
+  // 输入框下方的词表行必须真的注册出去，否则设置里看得到、对话里找不到入口。
+  assert.equal(typeof dock, 'function')
 })

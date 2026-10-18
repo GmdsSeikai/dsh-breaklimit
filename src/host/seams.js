@@ -1,5 +1,6 @@
 // 宿主运行时接缝：执行档位、审批分流、文件编辑与提示词装配。
 import { readInject } from '../context/inject-file.js'
+import { readMasks, maskText } from './masks.js'
 import { resolveHome } from '../patch/state.js'
 import { promptMode, readModeExtension, readTail } from '../context/prompt.js'
 import * as rules from '../context/rules.js'
@@ -88,8 +89,46 @@ function hardenStepMessages(decision, counters) {
   return touched ? { ...decision, messages } : decision
 }
 
-// ── 运行时状态 ──────────────────────────────────────────────────────────────
+/**
+ * 在把消息交给模型之前，按词表替换掉用户消息里的真实目标名。
+ *
+ * 只处理 `source.kind === 'user'`：工作区指令、运行时快照、技能目录都不是用户的
+ * 原话，动它们等于伪造环境。命中数写进 runtime，状态接口据此报「有没有在起作用」。
+ *
+ * 词表为空时整段跳过，一次文件读取都不做多余的判断：没配词表的用户不该为这个
+ * 功能付任何代价。
+ */
+function maskStepMessages(decision, runtime) {
+  if (decision?.kind !== 'enter' || !Array.isArray(decision.messages)) return decision
+  const { entries } = readMasks(resolveHome())
+  if (entries.length === 0) return decision
+  let touched = false
+  let hits = 0
+  const messages = decision.messages.map((message) => {
+    if (message?.source?.kind !== 'user') return message
+    if (!Array.isArray(message.content)) return message
+    let changed = false
+    const content = message.content.map((block) => {
+      if (block?.type !== 'text' || typeof block.text !== 'string') return block
+      const verdict = maskText(block.text, entries)
+      if (verdict.hits === 0) return block
+      hits += verdict.hits
+      changed = true
+      return { ...block, text: verdict.text }
+    })
+    if (!changed) return message
+    touched = true
+    return { ...message, content }
+  })
+  if (hits > 0) {
+    runtime.counters.maskHits += hits
+    // 后续步骤的批次里没有用户消息，这里只在真有命中时覆盖，别把上一轮的数字洗成 0。
+    runtime.maskLast = { hits, at: Date.now() }
+  }
+  return touched ? { ...decision, messages } : decision
+}
 
+// ── 运行时状态 ──────────────────────────────────────────────────────────────
 export function currentMode(ctx, session) {
   const policy = ctx.get('sandboxPolicy')
   if (policy === undefined || typeof policy.resolve !== 'function') return 'read-only'
@@ -242,7 +281,9 @@ export function registerSeams(ctx, config, runtime, order) {
   }, { prepend: true })
 
   // 提示词后点：本插件自己的段落，每轮重新读取注入文件。
-  // 尾部段落：两档共用的 tail.md，序号 8999——在宿主全部原生段之后、结构化输出之前。
+  // 尾部段落：两档共用的 tail.md，序号来自 config.order，缺省 8999。
+  // 8999 排在宿主第一方段之前（结构化输出 9900 起、persona-suffix 10200），
+  // 装机配置里把它抬到 10300，落在全部原生段之后。
   ctx.systemPrompt.section({
     name: SECTION_NAME,
     order,
@@ -321,7 +362,7 @@ export function registerSeams(ctx, config, runtime, order) {
     const decision = await next()
     runtime.counters.preStep += 1
     if (!runtime.enabled) return decision
-    return hardenStepMessages(decision, runtime.counters)
+    return maskStepMessages(hardenStepMessages(decision, runtime.counters), runtime)
   }, { prepend: true })
 
 }

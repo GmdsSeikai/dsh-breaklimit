@@ -29,7 +29,10 @@ export function apply(ctx, config = {}) {
       preStep: 0,
       hardenHits: 0,
       hardenMisses: 0,
+      maskHits: 0,
     },
+    // 最近一次命中词表的时间与次数，状态接口据此判断「这轮有没有在起作用」。
+    maskLast: { hits: 0, at: 0 },
   }
   const order = Number.isFinite(config.order) ? config.order : 8999
 

@@ -15,6 +15,7 @@ import { promptMode, readMode, readModeExtension } from '../context/prompt.js'
 import { applyModeBudget } from '../host/capabilities.js'
 import * as rules from '../context/rules.js'
 import * as tiers from '../context/tiers.js'
+import { readMasks, writeMasks, masksPath, MAX_MASKS, MAX_MASK_TERM } from '../host/masks.js'
 
 export const ROUTE_PREFIX = '/breaklimit'
 
@@ -289,6 +290,37 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
   }
 
   return {
+    // 目标词表：请求交给模型之前把真实目标名换成占位名。
+    // 读接口连最近一次命中一起返回，前端据此区分「没配」「配了但没命中」「在起作用」。
+    'GET /alias': () => {
+      const { entries, error } = readMasks(home())
+      const last = runtime.maskLast ?? { hits: 0, at: 0 }
+      return envelope(200, 'ok', error ?? '', {
+        entries,
+        file: redactPath(masksPath(home())),
+        limits: { maxEntries: MAX_MASKS, maxTerm: MAX_MASK_TERM },
+        hits: runtime.counters.maskHits ?? 0,
+        lastHits: last.hits,
+        lastAt: last.at,
+      })
+    },
+
+    // 整表覆盖写。词表很小，逐条增删会让前端和后端各维护一份状态，
+    // 直接整表提交，后端负责去重和校验。幂等。
+    'PUT /alias': async (req) => {
+      const parsed = parseJsonBody(await readBody(req, bodyLimit))
+      if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
+      if (!Array.isArray(parsed.entries)) {
+        return envelope(400, 'invalid_request', '需要 entries 数组，每项含 from 与 to。')
+      }
+      const result = writeMasks(home(), parsed.entries)
+      if (!result.ok) return envelope(500, 'write_failed', result.error ?? '写入失败。')
+      return envelope(200, 'saved', '', {
+        entries: result.entries,
+        file: redactPath(masksPath(home())),
+      })
+    },
+
     // 响应里的三处路径在这里折成 `…/最后一段`；`preflight`、`injection` 等其余结构原样
     // 透出（它们的 path 相对宿主根，不含盘符与用户目录）。
     'GET /status': () => {

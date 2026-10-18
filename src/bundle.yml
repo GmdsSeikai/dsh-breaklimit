@@ -105,3 +105,9 @@
         injectFile: ''
         hostRoot: ''
         allowedHosts: []
+        # 尾部段落（tail.md）的落点。默认 8999 排在宿主第一方段之前：
+        # 结构化输出 9900、harness 源码 10000、Web 表层 10100、
+        # deployment:persona-suffix 10200 都在它后面，于是提示词的最后
+        # 2637 字符是宿主的环境说明，而不是本插件的行为规则。
+        # 10200 是宿主第一方段的最大 order，10300 落在全部原生段之后。
+        order: 10300
