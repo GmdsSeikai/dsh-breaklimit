@@ -135,3 +135,89 @@ test('禁用集里的未知 id 不会把启用数算少', () => {
   assert.equal(list.enabledCount, list.total)
   assert.equal(list.disabledCount, 0)
 })
+
+// ---------------------------------------------------------------- 声明方向
+//
+// 夹具自证的另一种形态：把一条声明的 before 与 after 对调，整套测试仍然全绿。
+// 原因是别处的夹具大多由声明本身派生——声明怎么写，夹具跟着怎么造，方向永远对得上。
+//
+// 这里给每条 replace 补丁配一条**方向规则**。规则不读声明里的字面原文，只读这条补丁
+// 想达成的事：把哪个上限放大了、解除了哪个冻结、去掉了哪个禁止式。方向反了，规则拒绝。
+//
+// 它证明不了「这段原文真的在宿主文件里」——那要拿宿主副本对账，属于
+// tools/check-fixture.mjs 与 `npm run check:host` 那一层。两层各说各的话。
+
+const MODES = ['recommended', 'unrestricted']
+
+/** 取 `name: 8192` 形式的取值。 */
+function fieldNumber(text, name) {
+  const match = new RegExp(`${name}:\\s*(\\d+)`).exec(text)
+  return match === null ? null : Number(match[1])
+}
+
+/** 取 `= 2000`、`= 50 * 1024` 这类数值表达式的值；不是纯数字表达式就返回 null。 */
+function assignedValue(text) {
+  const tail = text.slice(text.lastIndexOf('=') + 1).trim()
+  if (/^[\d\s*]+$/.test(tail) === false) return null
+  return tail.split('*').reduce((product, part) => product * Number(part.trim()), 1)
+}
+
+/** 每条补丁的方向：改后必须比改前更宽，不能更窄。 */
+const DIRECTIONS = {
+  'output.trim': (target) => {
+    const before = fieldNumber(target.before, 'thresholdChars')
+    return MODES
+      .map(mode => fieldNumber(resolvedAfter(target, mode), 'thresholdChars'))
+      .every(after => before !== null && after !== null && after > before)
+  },
+  'read.limits': (target) => {
+    const before = assignedValue(target.before)
+    return MODES
+      .map(mode => assignedValue(resolvedAfter(target, mode)))
+      .every(after => before !== null && after !== null && after > before)
+  },
+  'minimal.unfreeze': target => /true\s*$/.test(target.before) && /false\s*$/.test(target.after),
+  'web.framing': (target) => {
+    const prohibition = /untrusted|never/i
+    return prohibition.test(target.before)
+      && MODES.every(mode => prohibition.test(resolvedAfter(target, mode)) === false)
+  },
+  'workspace.authority': (target) => {
+    const advisory = /may be relevant|do not override/i
+    return advisory.test(target.before)
+      && MODES.every((mode) => {
+        const after = resolvedAfter(target, mode)
+        return /take precedence/i.test(after) && advisory.test(after) === false
+      })
+  },
+}
+
+test('每条 replace 声明的方向由独立判据守着', () => {
+  for (const patch of PATCHES) {
+    assert.equal(
+      typeof DIRECTIONS[patch.id],
+      'function',
+      `${patch.id} 没有方向规则：新增补丁必须说明它把什么往哪个方向改`,
+    )
+    for (const target of patch.targets) {
+      assert.equal(DIRECTIONS[patch.id](target), true, `${patch.id} 的声明方向不对：${target.path}`)
+    }
+  }
+})
+
+test('方向判据拒绝对调后的声明（负向对照）', () => {
+  for (const patch of PATCHES) {
+    const swapped = patch.targets.map(target => ({
+      ...target,
+      before: target.after,
+      after: target.before,
+      afterByMode: undefined,
+    }))
+    const accepted = swapped.filter(target => DIRECTIONS[patch.id](target) === true)
+    assert.equal(
+      accepted.length,
+      0,
+      `${patch.id} 对调 before/after 之后仍被判为正确方向，这条判据等于没写`,
+    )
+  }
+})

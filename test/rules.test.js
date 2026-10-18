@@ -58,12 +58,20 @@ test('保存后能列出、读取，元数据落在清单里', () => {
   assert.equal(index.rules.length, 1)
 })
 
-test('正文超限拒绝写入，且不落盘', () => {
+test('正文上限 512 KiB：恰好等于上限接受，多一个字节拒绝且不落盘', () => {
   const home = tempHome()
-  const big = 'x'.repeat(MAX_RULE_BYTES + 1)
-  const result = saveRule(home, 'big', big, {})
+  // 夹具是字面量，不从被测常量派生。写成 `MAX_RULE_BYTES + 1` 的话，把常量放大
+  // 128 倍这条用例仍然全绿——它证明的是「实现和它自己一致」，不是「上限是 512 KiB」。
+  assert.equal(MAX_RULE_BYTES, 524288)
+
+  const atLimit = saveRule(home, 'at-limit', 'x'.repeat(524288), {})
+  assert.equal(atLimit.ok, true)
+  assert.equal(fs.statSync(ruleTextPath(home, 'at-limit')).size, 524288)
+
+  const result = saveRule(home, 'big', 'x'.repeat(524289), {})
   assert.equal(result.ok, false)
   assert.match(result.reason, /上限/u)
+  assert.equal(fs.existsSync(ruleTextPath(home, 'big')), false)
 })
 
 test('非法 id 与非字符串正文被拒绝', () => {
