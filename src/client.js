@@ -1656,7 +1656,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           emit()
           return
         }
-        state.entries = Array.isArray(data.entries) ? data.entries : []
+        // 落定时过一遍归一：后端返回脏条目（非字符串字段）时，渲染层不该因此白屏。
+        // 与 host/masks.js 同口径，幂等。
+        state.entries = normalizeAliasEntries(data.entries)
         state.limits = {
           maxEntries: Number.isFinite(data.limits?.maxEntries) ? data.limits.maxEntries : WORDS_MAX,
           maxTerm: Number.isFinite(data.limits?.maxTerm) ? data.limits.maxTerm : WORD_TERM_MAX,
@@ -1685,7 +1687,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         try {
           const payload = await requests.put("/alias", { entries: next })
           const data = payload?.data ?? {}
-          state.entries = Array.isArray(data.entries) ? data.entries : next
+          state.entries = normalizeAliasEntries(Array.isArray(data.entries) ? data.entries : next)
           state.phase = "ready"
           state.stale = false
           state.saving = false
@@ -3058,10 +3060,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     useEffect(() => { void load() }, [load])
 
     // 词库是两个挂载点共用的一份状态（见 createAliasStore）；这里只订阅重绘。
-    useEffect(() => {
-      void aliasStore.read()
-      return aliasStore.subscribe(() => { if (mounted.current) bump(value => value + 1) })
-    }, [])
+    // 首次读取由 load() 负责，不在这里再来一次——那会让挂载瞬间发两个 GET /alias。
+    useEffect(() => aliasStore.subscribe(() => { if (mounted.current) bump(value => value + 1) }), [])
 
     // 浮窗改了档位或词表，这里那份状态就旧了。两个挂载点各持一份 state，
     // 用事件而不是共享 store：只需要「重新拉一次」，不需要新的全局状态层。

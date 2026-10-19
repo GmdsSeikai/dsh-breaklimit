@@ -500,7 +500,7 @@ test('词库共享 store：串行整表写入、过期响应作废、失败保�
   await store.commit({ type: 'delete', from: 'c' })
   pendingGet({ ok: true, code: 'ok', message: '', data: { entries: [{ from: 'stale', to: 'x' }] } })
   await slow
-  assert.deepEqual(store.state.entries.map(entry => entry.from), ['a', 'e'])
+  assert.deepEqual(Array.from(store.state.entries, entry => entry.from), ['a', 'e'])
   failMode = null
 
   // 写失败：已保存列表不动，草稿逻辑在调用方；明确失败不是「结果未知」。
@@ -508,7 +508,7 @@ test('词库共享 store：串行整表写入、过期响应作废、失败保�
   const failed = await store.commit({ type: 'save', originalFrom: null, entry: { from: 'g', to: 'h' } })
   assert.equal(failed.ok, false)
   assert.equal(failed.unknown, false)
-  assert.deepEqual(store.state.entries.map(entry => entry.from), ['a', 'e'])
+  assert.deepEqual(Array.from(store.state.entries, entry => entry.from), ['a', 'e'])
 
   // 超时/断网是「结果未知」，不能宣称未生效。
   failMode = 'timeout'
@@ -521,11 +521,11 @@ test('词库共享 store：串行整表写入、过期响应作废、失败保�
   await store.read()
   assert.equal(store.state.phase, 'failed')
   assert.equal(store.state.stale, true)
-  assert.deepEqual(store.state.entries.map(entry => entry.from), ['a', 'e'])
+  assert.deepEqual(Array.from(store.state.entries, entry => entry.from), ['a', 'e'])
   const refused = await store.commit({ type: 'delete', from: 'a' })
   assert.equal(refused.ok, false)
   assert.equal(refused.refused, true)
-  assert.deepEqual(store.state.entries.map(entry => entry.from), ['a', 'e'])
+  assert.deepEqual(Array.from(store.state.entries, entry => entry.from), ['a', 'e'])
 
   // 重新读取成功后恢复写入。
   failMode = null
@@ -534,7 +534,7 @@ test('词库共享 store：串行整表写入、过期响应作废、失败保�
   assert.equal(store.state.stale, false)
   const recovered = await store.commit({ type: 'delete', from: 'a' })
   assert.equal(recovered.ok, true)
-  assert.deepEqual(store.state.entries.map(entry => entry.from), ['e'])
+  assert.deepEqual(Array.from(store.state.entries, entry => entry.from), ['e'])
 })
 
 test('浮窗「管理词库」直达词库页，拿不到宿主能力时退回提示', () => {
