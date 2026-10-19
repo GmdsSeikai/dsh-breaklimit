@@ -89,6 +89,13 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     fontSmall: "var(--dsw-font-xxs-12)",
     fontSmallStrong: "var(--dsw-font-xxs-strong-12)",
     mono: "var(--dsw-font-mono, var(--ds-font-family-code, ui-monospace, Consolas, monospace))",
+    // 字号四档：宿主令牌只有 16/13/12 三档，页面标题与区块标题这一级需要自己定值。
+    // 应用名比页面标题小一号，这样进到任何一页，第一眼看到的是页面标题而不是产品名。
+    fontApp: "17px",
+    fontPage: "22px",
+    fontSection: "15px",
+    fontLabel: "13px",
+    fontHelp: "12px",
   }
 
   const TONE_COLOR = { ok: tk.ok, warn: tk.warn, error: tk.error, info: tk.accent, accent: tk.accent, idle: tk.line4 }
@@ -100,10 +107,21 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     root: { display: "flex", flexDirection: "column", gap: "16px", font: tk.font, color: tk.label, minWidth: 0 },
     header: { display: "flex", alignItems: "flex-start", gap: "12px" },
     headText: { display: "flex", flexDirection: "column", gap: "4px", flex: "1 1 auto", minWidth: 0 },
-    title: { margin: 0, font: tk.fontTitle, fontWeight: 600, color: tk.label },
-    lead: { margin: 0, font: tk.fontSmall, color: tk.label3 },
+    title: { margin: 0, fontSize: tk.fontApp, lineHeight: 1.35, fontWeight: 600, letterSpacing: "-0.2px", color: tk.label },
+    lead: { margin: 0, fontSize: tk.fontLabel, color: tk.label3 },
     headAside: { display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 },
     stamp: { font: tk.fontSmall, color: tk.caption, whiteSpace: "nowrap" },
+
+    // 每页顶部：页面标题是这一屏的第一眼，应用名只在顶栏出现一次。
+    pageHead: { display: "flex", alignItems: "flex-start", gap: "12px", minWidth: 0 },
+    pageHeadText: { display: "flex", flexDirection: "column", gap: "4px", flex: "1 1 auto", minWidth: 0 },
+    pageTitle: { margin: 0, fontSize: tk.fontPage, lineHeight: 1.35, fontWeight: 650, letterSpacing: "-0.3px", color: tk.label },
+    pageDesc: { margin: 0, fontSize: tk.fontLabel, color: tk.label2, maxWidth: "62ch" },
+    whenTag: {
+      flexShrink: 0, alignSelf: "center", padding: "2px 9px", borderRadius: "999px",
+      border: `0.5px solid ${tk.line2}`, background: tk.well, fontSize: tk.fontHelp,
+      color: tk.label3, whiteSpace: "nowrap",
+    },
 
     tablist: { display: "flex", columnGap: "24px", overflowX: "auto", scrollbarWidth: "thin", borderBottom: `0.5px solid ${tk.line2}` },
     tab: {
@@ -120,13 +138,13 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     },
     cardHead: { display: "flex", alignItems: "flex-start", gap: "12px" },
     cardHeadText: { display: "flex", flexDirection: "column", gap: "2px", flex: "1 1 auto", minWidth: 0 },
-    cardTitle: { margin: 0, font: tk.fontStrong, color: tk.label },
+    cardTitle: { margin: 0, fontSize: tk.fontSection, lineHeight: 1.45, fontWeight: 600, color: tk.label },
     eyebrow: { display: "inline-flex", alignItems: "center", gap: "6px", font: tk.fontSmallStrong, color: tk.label3 },
-    bigTitle: { margin: 0, font: tk.fontStrong, fontWeight: 600, color: tk.label },
+    bigTitle: { margin: 0, fontSize: tk.fontSection, lineHeight: 1.45, fontWeight: 650, color: tk.label },
 
     text: { margin: 0, color: tk.label2 },
-    small: { margin: 0, font: tk.fontSmall, color: tk.label3 },
-    caption: { font: tk.fontSmall, color: tk.caption },
+    small: { margin: 0, fontSize: tk.fontHelp, color: tk.label3 },
+    caption: { fontSize: tk.fontHelp, color: tk.caption },
     strong: { font: tk.fontStrong, color: tk.label },
     row: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" },
     spacer: { flex: "1 1 auto" },
@@ -345,6 +363,22 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       tabPrompt: "提示词",
       tabRules: "规则",
       tabWords: "词库",
+      // 每页顶部：标题、一句说明、生效时机。生效标签在标题旁，回答「我改完什么时候有用」。
+      pageOverviewTitle: "从这里开始",
+      pageOverviewDesc: "先看当前状态，再完成需要做的那一步。",
+      pagePatchesTitle: "选择你需要的改动",
+      pagePatchesDesc: "先挑选，再统一应用。关闭开关会保留已写入的源码改动。",
+      pagePromptTitle: "让模型按你的方式协作",
+      pagePromptDesc: "选择附加指令模式，或编辑两档共用的正文。",
+      pageRulesTitle: "管理长期规则",
+      pageRulesDesc: "保存是存下来；激活才会写入指令文件。同一时间激活一条。",
+      pageWordsTitle: "管理目标词",
+      pageWordsDesc: "消息交给模型前，把原词换成替换词。保存后新开会话生效。",
+      whenTag: (label) => `生效：${String(label)}`,
+      whenRestart: "重启宿主后",
+      whenNextTurn: "下一轮对话",
+      whenActivate: "激活后写入",
+      whenNewSession: "新开会话",
       refresh: "刷新",
       refreshedAt: (s) => `更新于${String(s)}`,
       agoJust: "刚刚",
@@ -829,6 +863,21 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       tabPrompt: "Prompt",
       tabRules: "Rules",
       tabWords: "Word list",
+      pageOverviewTitle: "Start here",
+      pageOverviewDesc: "Check the current state, then finish the step that is actually blocking you.",
+      pagePatchesTitle: "Pick the changes you need",
+      pagePatchesDesc: "Select first, apply once. Turning a switch off keeps whatever was already written.",
+      pagePromptTitle: "Make the model work your way",
+      pagePromptDesc: "Choose a mode, or edit the body both modes share.",
+      pageRulesTitle: "Manage long-term rules",
+      pageRulesDesc: "Saving stores it; activating writes it into the instruction file. One active at a time.",
+      pageWordsTitle: "Manage terms",
+      pageWordsDesc: "Swaps terms in your message before it reaches the model. Takes effect in a new session.",
+      whenTag: (label) => `Takes effect: ${String(label)}`,
+      whenRestart: "after restarting the host",
+      whenNextTurn: "next turn",
+      whenActivate: "on activation",
+      whenNewSession: "new session",
       refresh: "Refresh",
       refreshedAt: (s) => `Updated ${String(s)}`,
       agoJust: "just now",
@@ -2057,6 +2106,16 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     return h("span", { style: merge(S.tag, color && { color, border: "0.5px solid currentColor" }) }, children)
   }
 
+  /** 每页顶部：大标题、一句说明、生效时机、右侧操作。 */
+  function PageHead({ title, desc, when, aside, titleId }) {
+    return h("div", { style: S.pageHead },
+      h("div", { style: S.pageHeadText },
+        h("h2", { id: titleId, style: S.pageTitle }, title),
+        desc === undefined ? null : h("p", { style: S.pageDesc }, desc)),
+      when === undefined ? null : h("span", { style: S.whenTag }, T.whenTag(when)),
+      aside ?? null)
+  }
+
   function Card({ title, titleId, desc, descId, aside, children }) {
     return h("section", { style: S.card, "aria-labelledby": title === undefined ? undefined : titleId },
       title === undefined
@@ -2332,6 +2391,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const injectBad = status?.inject && status.inject.ok === false
 
     return h("div", { style: S.panel },
+      h(PageHead, { title: T.pageOverviewTitle, desc: T.pageOverviewDesc, titleId: "bkl-page-overview" }),
       restart === null ? h(NextStepCard, { step, busy, onRun, notice: nextNotice }) : restartView,
       // 首次使用步骤可收起：用得熟了以后不占地方，状态看上面的下一步卡。
       h(Card, {
@@ -2461,6 +2521,10 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const blockedText = f.blocked.map(item => `${String(item?.patchId ?? "")} · ${String(item?.path ?? "")} · ${String(item?.reason ?? "")}`).join("\n")
 
     return h("div", { style: S.panel },
+      h(PageHead, {
+        title: T.pagePatchesTitle, desc: T.pagePatchesDesc, titleId: "bkl-page-patches",
+        when: T.whenRestart,
+      }),
       restartView ?? null,
       h(Card, { title: T.patchesTitle, titleId: "bkl-patches-title", desc: T.patchesLead },
         h("ul", { style: S.legend },
@@ -2777,15 +2841,17 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           : preview.matched.length > 0 ? T.wordsPreviewHit(preview.matched.length)
             : T.wordsPreviewMiss
     return h("div", { style: S.panel },
+      h(PageHead, {
+        title: T.pageWordsTitle, desc: T.pageWordsDesc, titleId: "bkl-page-words",
+        when: T.whenNewSession,
+        aside: canReturn ? h(Button, { size: "small", onClick: onReturnChat }, T.wordsFromChatReturn) : null,
+      }),
       restartView ?? null,
       h(Card, {
         title: T.wordsTitle,
         titleId: "bkl-words-title",
         desc: T.wordsLead,
         descId: "bkl-words-lead",
-        aside: canReturn
-          ? h(Button, { size: "small", onClick: onReturnChat }, T.wordsFromChatReturn)
-          : null,
       },
         h("p", { style: S.small }, T.wordsScope)),
       readFailed
@@ -3812,6 +3878,10 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       })
     } else if (tab === "prompt") {
       body = h("div", { style: S.panel },
+        h(PageHead, {
+          title: T.pagePromptTitle, desc: T.pagePromptDesc, titleId: "bkl-page-prompt",
+          when: T.whenNextTurn,
+        }),
         restartView,
         h(ModeBlock, {
           mode: f.mode,
@@ -3830,6 +3900,10 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         }))
     } else if (tab === "rules") {
       body = h("div", { style: S.panel },
+        h(PageHead, {
+          title: T.pageRulesTitle, desc: T.pageRulesDesc, titleId: "bkl-page-rules",
+          when: T.whenActivate,
+        }),
         restartView,
         h(RulesBlock, {
           rules: f.rules,
