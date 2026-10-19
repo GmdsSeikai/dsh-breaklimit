@@ -36,10 +36,9 @@ $env:DSH_BREAKLIMIT_HOST_ROOT = $DshRoot
 node --version
 pnpm --version
 git -C "$DshRoot" rev-parse HEAD
-node src/cli.js --doctor
 ```
 
-最后一条应输出上表中的宿主提交。宿主目录中应有 `apps/cli/src/bin.ts`；也可以运行 `node src/cli.js --doctor` 就地检查 Node、pnpm、git 及宿主目录是否就绪。不同则先停止，确认安装形态与版本。
+最后一条应输出上表中的宿主提交。宿主目录中应有 `apps/cli/src/bin.ts`；不同则先停止，确认安装形态与版本。
 
 ### 2. 准备独立的 Web profile
 
@@ -66,6 +65,12 @@ node --import tsx/esm apps/cli/src/bin.ts plugin --profile web-breaklimit add "$
 if ($LASTEXITCODE -ne 0) { throw '插件安装失败，请停止并检查输出。' }
 
 Set-Location "$PluginRoot"
+node src/cli.js --doctor
+```
+
+`--doctor` 只读，逐项检查 Node、pnpm、git、宿主根、宿主依赖、数据目录、Web 组合与插件注册。到这一步八项都应通过；有失败项时按它给出的指引处理，再继续。
+
+```powershell
 node src/cli.js --host-root "$DshRoot" --status
 ```
 

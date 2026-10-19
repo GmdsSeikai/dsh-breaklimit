@@ -54,6 +54,7 @@ test('--doctor 在完备的虚拟环境下全部 PASS 返回 0', () => {
 
   // 构造有效的宿主根结构（包含 package.json 与 apps/cli/src 标记）
   fs.mkdirSync(path.join(hostRoot, 'apps', 'cli', 'src'), { recursive: true })
+  fs.mkdirSync(path.join(hostRoot, 'node_modules'), { recursive: true })
   fs.writeFileSync(path.join(hostRoot, 'package.json'), JSON.stringify({ name: 'deepseek-harness' }), 'utf8')
 
   // 构造有效的 DSH_HOME 与 profile 结构
@@ -64,6 +65,7 @@ test('--doctor 在完备的虚拟环境下全部 PASS 返回 0', () => {
     dependencies: {
       'rumo-dsh-breaklimit': 'file:../../../dsh-breaklimit',
     },
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } },
   }), 'utf8')
 
   // pnpm 与 git 用桩：CI 的 runner 上没有 pnpm，走真实 PATH 这条用例必红。
@@ -78,7 +80,9 @@ test('--doctor 在完备的虚拟环境下全部 PASS 返回 0', () => {
   assert.match(stdout, /\[PASS\] pnpm 包管理器：v9\.15\.0/)
   assert.match(stdout, /\[PASS\] git 版本控制：git version 2\.45\.0/)
   assert.match(stdout, /\[PASS\] 宿主源码根.*HEAD: 687f282e/)
+  assert.match(stdout, /\[PASS\] 宿主依赖：已安装 node_modules/)
   assert.match(stdout, /\[PASS\] DSH 数据目录/)
+  assert.match(stdout, /\[PASS\] Web 组合：profile 的 bundles 含 @deepseek-ai\/dsh-web-app/)
   assert.match(stdout, /\[PASS\] 插件注册状态/)
   assert.match(stdout, /诊断完成：全部检查项通过/)
 })
@@ -87,10 +91,12 @@ test('--doctor 在 pnpm 与 git 都缺失时判失败，与 runner 实际安装�
   const home = tempDir('bkl-doctor-nodeps-home-')
   const hostRoot = tempDir('bkl-doctor-nodeps-host-')
   fs.mkdirSync(path.join(hostRoot, 'apps', 'cli', 'src'), { recursive: true })
+  fs.mkdirSync(path.join(hostRoot, 'node_modules'), { recursive: true })
   fs.mkdirSync(path.join(home, 'profiles', 'web-breaklimit'), { recursive: true })
   fs.writeFileSync(path.join(home, 'profiles', 'web-breaklimit', 'package.json'), JSON.stringify({
     name: 'web-breaklimit',
     dependencies: { 'rumo-dsh-breaklimit': 'file:x' },
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } },
   }), 'utf8')
 
   const { code, stdout } = runCapture(

@@ -101,7 +101,7 @@ node tools/rebuild-state.mjs "$DshRoot"
 
 | 现象 | 先检查 | 下一步 |
 | --- | --- | --- |
-| 环境不确定或启动报错 | 运行 `node src/cli.js --doctor` | 逐项核对 Node、pnpm、git、宿主根、DSH 数据目录与插件依赖注册状态 |
+| 环境不确定或启动报错 | 运行 `node src/cli.js --doctor` | 逐项核对 Node、pnpm、git、宿主根、宿主依赖、DSH 数据目录、Web 组合与插件注册状态 |
 | `pnpm not found` | 同一终端运行 `pnpm --version` | 按宿主安装要求配置 pnpm，确认 PATH 后重新安装插件 |
 | 找不到 `tsx` 或宿主包 | 是否在宿主根，源码版是否已安装依赖 | 先恢复宿主原本能运行的环境，不在插件目录安装宿主依赖 |
 | 设置页没有入口 | profile 是否含 `@deepseek-ai/dsh-web-app` 和本插件 | 停止该 profile，保留现有字段，补齐缺少的 Web bundle 后重启 |

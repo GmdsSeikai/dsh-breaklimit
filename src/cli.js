@@ -369,9 +369,31 @@ function runDoctor(options, env, deps = {}) {
     }
   }
 
-  // 5. DSH 数据目录与 profile
+  // 5. 宿主依赖。源码版要能跑起来，`node_modules` 必须在；缺了它后面每一步都会
+  // 报「找不到 tsx」，那是 FAQ 里最常见的一条，放在最前面比让人自己找强。
+  if (hostRoot && fs.existsSync(hostRoot)) {
+    const depsInstalled = fs.existsSync(path.join(hostRoot, 'node_modules'))
+    if (depsInstalled) {
+      lines.push('  [PASS] 宿主依赖：已安装 node_modules')
+    } else {
+      failCount += 1
+      lines.push(`  [FAIL] 宿主依赖：${hostRoot} 下没有 node_modules`)
+      lines.push('         修复指引：在宿主根执行 pnpm install，装完再回来重跑 --doctor')
+    }
+  }
+
+  // 6. DSH 数据目录与 profile
   const home = resolveHome(env)
   const profileDir = path.join(home, 'profiles', 'web-breaklimit')
+  const profilePkg = path.join(profileDir, 'package.json')
+  let manifest = null
+  if (fs.existsSync(profilePkg)) {
+    try {
+      manifest = JSON.parse(fs.readFileSync(profilePkg, 'utf8'))
+    } catch {
+      manifest = null
+    }
+  }
   if (!fs.existsSync(profileDir)) {
     failCount += 1
     lines.push(`  [FAIL] DSH 数据目录：未找到 web-breaklimit 配置目录 (${profileDir})`)
@@ -380,15 +402,21 @@ function runDoctor(options, env, deps = {}) {
     lines.push(`  [PASS] DSH 数据目录：${home} (已发现 web-breaklimit profile)`)
   }
 
-  // 6. 插件依赖注入状态
-  const profilePkg = path.join(profileDir, 'package.json')
-  let depOk = false
-  if (fs.existsSync(profilePkg)) {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(profilePkg, 'utf8'))
-      depOk = Boolean(parsed.dependencies?.['rumo-dsh-breaklimit'])
-    } catch {}
+  // 7. Web 组合。profile 里少了 web-app，宿主起得来但设置页没有入口，光看日志
+  // 看不出是少了 bundle。
+  if (fs.existsSync(profileDir)) {
+    const bundles = Array.isArray(manifest?.dsh?.profile?.bundles) ? manifest.dsh.profile.bundles : []
+    if (bundles.includes('@deepseek-ai/dsh-web-app')) {
+      lines.push('  [PASS] Web 组合：profile 的 bundles 含 @deepseek-ai/dsh-web-app')
+    } else {
+      failCount += 1
+      lines.push('  [FAIL] Web 组合：profiles/web-breaklimit 的 dsh.profile.bundles 缺少 @deepseek-ai/dsh-web-app')
+      lines.push('         修复指引：按安装说明补齐 Web bundle，或对该 profile 重跑一次 --from-default-profile web')
+    }
   }
+
+  // 8. 插件依赖注入状态
+  const depOk = Boolean(manifest?.dependencies?.['rumo-dsh-breaklimit'])
   if (depOk) {
     lines.push('  [PASS] 插件注册状态：profiles/web-breaklimit 已声明依赖 rumo-dsh-breaklimit')
   } else if (fs.existsSync(profileDir)) {
