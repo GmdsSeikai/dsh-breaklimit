@@ -19,10 +19,11 @@ export function requireDraft(release, tag, sha) {
 }
 
 function findRelease(tag, call) {
-  try { return JSON.parse(call(['api', `repos/${REPOSITORY}/releases/tags/${tag}`])) } catch (error) {
-    if (/HTTP 404/u.test(String(error.stderr))) return null
-    throw error
-  }
+  // The tag endpoint resolves published releases; authenticated listings include drafts.
+  const pages = JSON.parse(call(['api', `repos/${REPOSITORY}/releases?per_page=100`, '--paginate', '--slurp']))
+  const matches = pages.flat().filter(release => release.tag_name === tag)
+  if (matches.length > 1) throw new Error(`Multiple releases match ${tag}; inspect GitHub before retrying`)
+  return matches[0] ?? null
 }
 
 export function prepareDraft(repo, tag, sha, directory, notesFile, call = gh) {

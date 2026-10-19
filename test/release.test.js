@@ -126,8 +126,11 @@ function remoteFixture(t) {
   const call = args => {
     if (args[0] === 'api') {
       if (args[1].includes('/commits/')) return sha
-      if (state.release === null) throw Object.assign(new Error('not found'), { stderr: 'HTTP 404' })
-      return JSON.stringify({ ...state.release, assets: fs.readdirSync(stored).map((name, id) => ({ name, id, size: fs.statSync(path.join(stored, name)).size, updated_at: 'fixed' })) })
+      if (args[1].includes('/releases/tags/')) throw Object.assign(new Error('draft is not a published release'), { stderr: 'HTTP 404' })
+      assert.equal(args[1], 'repos/rumoii/dsh-breaklimit/releases?per_page=100')
+      assert.ok(args.includes('--paginate') && args.includes('--slurp'))
+      const release = state.release === null ? [] : [{ ...state.release, assets: fs.readdirSync(stored).map((name, id) => ({ name, id, size: fs.statSync(path.join(stored, name)).size, updated_at: 'fixed' })) }]
+      return JSON.stringify([[{ tag_name: 'unrelated' }], release])
     }
     if (args[1] === 'download') {
       const destination = args[args.indexOf('--dir') + 1]
@@ -156,6 +159,14 @@ test('准备草稿真实核对已有字节，重复执行不重复上传', t => 
   assert.equal(state.writes.filter(args => args[1] === 'upload').length, 1)
   fs.unlinkSync(path.join(stored, 'SHA256SUMS.txt'))
   assert.deepEqual(prepareDraft(repo, 'v0.9.2', sha, out, notes, call).uploaded, ['SHA256SUMS.txt'])
+  const writes = state.writes.length
+  assert.throws(() => prepareDraft(repo, 'v0.9.2', sha, out, notes, args => {
+    const result = call(args)
+    if (args[0] !== 'api' || args[1].includes('/commits/')) return result
+    const pages = JSON.parse(result)
+    return JSON.stringify([...pages, pages.at(-1)])
+  }), /Multiple releases/)
+  assert.equal(state.writes.length, writes)
 })
 
 test('已有草稿附件不符或已发布时，拒绝任何覆盖操作', t => {
@@ -173,9 +184,10 @@ test('已有草稿附件不符或已发布时，拒绝任何覆盖操作', t => 
 })
 
 test('网络或认证失败不得被当成 Release 不存在而创建新草稿', t => {
-  const { repo, sha, out, notes } = remoteFixture(t)
+  const { repo, sha, out, notes, call } = remoteFixture(t)
   let attempts = 0
-  assert.throws(() => prepareDraft(repo, 'v0.9.2', sha, out, notes, () => {
+  assert.throws(() => prepareDraft(repo, 'v0.9.2', sha, out, notes, args => {
+    if (args[1].includes('/commits/')) return call(args)
     attempts += 1
     throw Object.assign(new Error('network unavailable'), { stderr: 'HTTP 403' })
   }), /network unavailable/)
