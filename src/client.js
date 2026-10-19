@@ -3077,5 +3077,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   exports.name = name
   exports.inject = inject
   exports.apply = apply
+  // 草稿脏判定抽出来导出，测试直接测这个纯函数。挂在组件内部时只能靠桩 React
+  // 状态去逼出脏草稿，桩一改就把断言也改歪了。
+  exports.isRuleEditDirty = isRuleEditDirty
   return module.exports
 }})

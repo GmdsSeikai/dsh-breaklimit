@@ -62,7 +62,7 @@ test('设置页分区方向键同步移动键盘焦点', () => {
   assert.equal(typeof dock, 'function')
 })
 
-test('RuleEditor 重名 ID 时展示打开已有规则按钮，且组件注册 beforeunload 守卫', () => {
+test('草稿脏判定覆盖改动与未改动，beforeunload 守卫在无草稿时不拦截', () => {
   let registration
   let beforeunloadHandler = null
   const listeners = {}
@@ -111,6 +111,24 @@ test('RuleEditor 重名 ID 时展示打开已有规则按钮，且组件注册 b
   // 渲染组件并确保 beforeunload 守卫已被注册
   component()
   assert.equal(typeof beforeunloadHandler, 'function')
+
+  // 脏判定本身在这里直接测：桩里的 useState 恒返回初始值，ruleEdit 永远是 null，
+  // 靠渲染逼不出脏草稿。判定是纯函数，测它比测 React 生命周期可靠。
+  const isDirty = exported.isRuleEditDirty
+  assert.equal(typeof isDirty, 'function')
+  assert.equal(isDirty(null), false)
+
+  const fresh = { isNew: true, id: "", name: "", target: "AGENTS.md", text: "" }
+  assert.equal(isDirty({ ...fresh, baseline: fresh }), false)
+  assert.equal(isDirty({ ...fresh, id: "abc", baseline: fresh }), true)
+  assert.equal(isDirty({ ...fresh, name: "名字", baseline: fresh }), true)
+  assert.equal(isDirty({ ...fresh, text: "正文", baseline: fresh }), true)
+
+  const loaded = { isNew: false, id: "abc", name: "", target: "AGENTS.md", text: "body" }
+  assert.equal(isDirty({ ...loaded, baseline: loaded }), false)
+  assert.equal(isDirty({ ...loaded, text: "body2", baseline: loaded }), true)
+  assert.equal(isDirty({ ...loaded, target: "CLAUDE.md", baseline: loaded }), true)
+  assert.equal(isDirty({ ...loaded, name: "N", baseline: loaded }), true)
 
   // 验证 beforeunload 拦截逻辑
   let prevented = false

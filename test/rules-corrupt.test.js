@@ -6,6 +6,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { EventEmitter } from 'node:events'
 import * as rules from '../src/context/rules.js'
+import { acquireFileLock, releaseFileLock } from '../src/patch/lock.js'
 import { createHandler } from '../src/serve/http.js'
 
 function tempHome(t) {
@@ -142,6 +143,40 @@ test('recoverCorruptIndex 备份损坏清单至 $DSH_HOME/dsh-breaklimit-backup 
   const secondRes = rules.recoverCorruptIndex(home)
   assert.equal(secondRes.ok, false)
   assert.equal(secondRes.code, 'index_not_corrupt')
+})
+
+test('备份失败时不写空清单，原 rules.json 与损坏状态都保持不变', (t) => {
+  const home = tempHome(t)
+  const corruptContent = '{ corrupt json, backup cannot be created }'
+  const file = writeCorruptIndex(home, corruptContent)
+  // 用同名文件占住备份目录的位置：mkdirSync 会在这一级报 ENOTDIR/EEXIST。
+  fs.writeFileSync(path.join(home, 'dsh-breaklimit-backup'), 'occupied by a file', 'utf8')
+
+  const res = rules.recoverCorruptIndex(home)
+  assert.equal(res.ok, false)
+  assert.equal(res.code, 'backup_failed')
+  // 关键：备份没成，就一个字节都不动，清单仍是损坏态，不会被换成空清单。
+  assert.equal(fs.readFileSync(file, 'utf8'), corruptContent)
+  assert.equal(rules.readIndex(home).kind, 'corrupt')
+})
+
+test('规则锁被占用时写入口返回 locked，正文与清单都不落盘', (t) => {
+  const home = tempHome(t)
+  const seeded = rules.saveRule(home, 'seed', 'existing body', { name: 'Seed', target: 'AGENTS.md' })
+  assert.equal(seeded.ok, true)
+
+  // 同进程再拿一次锁：pid 还活着，锁不是陈旧的，第二次必然冲突。
+  const handle = acquireFileLock(home, 'test-holder')
+  assert.ok(handle && typeof handle.path === 'string')
+  try {
+    const res = rules.saveRule(home, 'blocked', 'body', { name: 'Blocked', target: 'AGENTS.md' })
+    assert.equal(res.ok, false)
+    assert.equal(res.code, 'locked')
+    assert.equal(fs.existsSync(rules.ruleTextPath(home, 'blocked')), false)
+    assert.equal(rules.listRules(home).some(rule => rule.id === 'blocked'), false)
+  } finally {
+    releaseFileLock(handle)
+  }
 })
 
 test('HTTP 接口：损坏时写操作返回 409 index_corrupt，recover 路由成功恢复', async (t) => {
