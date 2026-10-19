@@ -596,10 +596,23 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       errUnknownPatchNext: "补丁清单可能已经变了，点「重新检查」刷新。",
       errRule: "规则操作被拒绝",
       errRuleNext: "这条规则可能已被删除，或文件读不出来。点「重新检查」刷新列表。",
+      errRuleBodyWrite: "写入规则正文文件失败",
+      errRuleBodyWriteNext: "请检查磁盘空间或数据目录权限，原规则清单未被改动。",
+      errRuleIndex: "更新规则清单失败",
+      errRuleIndexNext: "请检查数据目录中的 rules.json 权限。",
+      errRuleIndexWithBody: "正文已保存，但未能更新规则清单",
+      errRuleIndexWithBodyNext: "新正文已写入 bodies/ 目录，但 rules.json 未能同步更新，建议重新保存一次。",
+      errRuleLanding: "正文与清单已保存，但未能同步写入目标文件",
+      errRuleLandingNext: "规则已落盘并生效于清单，但写入 AGENTS.md 或 CLAUDE.md 时失败，请检查该文件是否被外部占用或写保护。",
       errServer: "插件后端出错了",
       errServerNext: "点「重新检查」；反复出现，请把错误代码报给作者。",
       errUnknown: "操作没有成功",
       errUnknownNext: "点「重新检查」看看当前状态；反复出现，请把错误代码报给作者。",
+      breaklimitButton: "破限",
+      dockPopoverTitle: "破限快捷设置",
+      dockModeTitle: "提示词模式",
+      confirmOverwriteAlias: (from) => `词条「${String(from)}」已存在，确定覆盖吗？`,
+      confirmDeleteAlias: (from) => `确定删除词条「${String(from)}」吗？`,
       aliasTitle: "目标词表",
       aliasDesc: "这里配的词会在请求发出前替换回原文里的真实目标名换成占位名。",
       aliasStateEmpty: "词表未配置",
@@ -612,6 +625,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       aliasTo: "替换成",
       aliasAdd: "添加",
       aliasRemove: "删除",
+      aliasConfirmDelete: "确认删除？",
       aliasFoot: "改动只对之后的新会话生效",
       aliasSaveFailed: "保存失败，改动没有生效",
       aliasClose: "关闭",
@@ -941,10 +955,23 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       errUnknownPatchNext: "The patch list may have changed. Press Check again to refresh.",
       errRule: "The rule action was refused",
       errRuleNext: "The rule may have been deleted or its file is unreadable. Press Check again to refresh the list.",
+      errRuleBodyWrite: "Failed to write rule body file",
+      errRuleBodyWriteNext: "Check disk space or directory permissions. The rules index was untouched.",
+      errRuleIndex: "Failed to update rules index",
+      errRuleIndexNext: "Check permissions of rules.json in the data directory.",
+      errRuleIndexWithBody: "Body saved, but failed to update rules index",
+      errRuleIndexWithBodyNext: "The new body is in bodies/, but rules.json was not updated. Try saving again.",
+      errRuleLanding: "Body and index saved, but failed to sync landing file",
+      errRuleLandingNext: "The rule is saved in bodies/ and the index, but writing to the target file failed. Check if it is locked or write-protected.",
       errServer: "The plugin backend failed",
       errServerNext: "Press Check again. If it keeps happening, report the error code to the author.",
       errUnknown: "The action did not succeed",
       errUnknownNext: "Press Check again to see the current state. If it keeps happening, report the error code to the author.",
+      breaklimitButton: "Breaklimit",
+      dockPopoverTitle: "Quick Breaklimit Settings",
+      dockModeTitle: "Prompt Mode",
+      confirmOverwriteAlias: (from) => `Entry "${String(from)}" already exists. Overwrite?`,
+      confirmDeleteAlias: (from) => `Delete entry "${String(from)}"?`,
       aliasTitle: "Target words",
       aliasDesc: "Words listed here replace the real target name in your message before it reaches the model.",
       aliasStateEmpty: "Word list empty",
@@ -957,6 +984,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       aliasTo: "Replace with",
       aliasAdd: "Add",
       aliasRemove: "Remove",
+      aliasConfirmDelete: "Confirm delete?",
       aliasFoot: "Changes apply to new sessions only",
       aliasSaveFailed: "Save failed; nothing changed",
       aliasClose: "Close",
@@ -1057,6 +1085,15 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       case "too_large": return make(T.errTooLarge, T.errTooLargeNext, null)
       case "write_failed": return make(T.errWrite, T.errWriteNext, null)
       case "unknown_patch": return make(T.errUnknownPatch, T.errUnknownPatchNext, "refresh")
+      case "body_write_failed": return make(T.errRuleBodyWrite, T.errRuleBodyWriteNext, null)
+      case "index_write_failed":
+        return make(
+          data?.bodyWritten ? T.errRuleIndexWithBody : T.errRuleIndex,
+          data?.bodyWritten ? T.errRuleIndexWithBodyNext : T.errRuleIndexNext,
+          "refresh"
+        )
+      case "landing_write_failed":
+        return make(T.errRuleLanding, T.errRuleLandingNext, "refresh")
       case "rule_invalid":
       case "rule_unreadable": return make(T.errRule, T.errRuleNext, "refresh")
       default:
@@ -2605,6 +2642,47 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     },
     head: { display: "flex", alignItems: "center", justifyContent: "space-between" },
     title: { margin: 0, fontSize: 13, fontWeight: 600, color: tk.label },
+    subhead: { margin: 0, fontSize: 12, fontWeight: 600, color: tk.label },
+    divider: { height: 1, background: tk.line1, margin: "2px 0" },
+    modeRow: { display: "flex", gap: 6 },
+    modeBtn: {
+      flex: 1,
+      padding: "4px 8px",
+      border: `1px solid ${tk.line2}`,
+      borderRadius: 6,
+      background: tk.well,
+      font: "inherit",
+      fontSize: 12,
+      color: tk.label2,
+      cursor: "pointer",
+      textAlign: "center",
+    },
+    modeBtnActive: {
+      background: tk.layer1,
+      color: tk.label,
+      borderColor: tk.line3 ?? tk.line2,
+      fontWeight: 600,
+    },
+    warnBox: {
+      padding: "6px 8px",
+      background: tk.well,
+      border: `1px solid ${tk.line2}`,
+      borderRadius: 4,
+      fontSize: 12,
+      color: tk.label,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    confirmBtn: {
+      marginLeft: 8,
+      padding: "2px 8px",
+      borderRadius: 4,
+      border: `1px solid ${tk.line2}`,
+      background: tk.layer1,
+      color: tk.label,
+      cursor: "pointer",
+    },
     close: {
       width: 24,
       height: 24,
@@ -2688,9 +2766,13 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const [entries, setEntries] = useState([])
     const [lastHits, setLastHits] = useState(0)
     const [phase, setPhase] = useState("loading")
+    const [tier, setTier] = useState("recommended")
+    const [tierBusy, setTierBusy] = useState(false)
     const [open, setOpen] = useState(false)
     const [fromInput, setFromInput] = useState("")
     const [toInput, setToInput] = useState("")
+    const [confirmFrom, setConfirmFrom] = useState(null)
+    const [deletingIndex, setDeletingIndex] = useState(null)
     const [saving, setSaving] = useState(false)
     const [saveFailed, setSaveFailed] = useState(false)
     const rootRef = useRef(null)
@@ -2698,17 +2780,35 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
     const load = useCallback(async () => {
       try {
-        const payload = await get("/alias")
+        const [aliasRes, tierRes] = await Promise.all([
+          get("/alias"),
+          get("/tier").catch(() => null),
+        ])
         if (!aliveRef.current) return
-        const data = payload?.data ?? {}
+        const data = aliasRes?.data ?? {}
         setEntries(Array.isArray(data.entries) ? data.entries : [])
         setLastHits(Number(data.lastHits) || 0)
         setPhase("ready")
+        if (typeof tierRes?.data?.tier === "string") {
+          setTier(tierRes.data.tier)
+        }
       } catch {
         if (!aliveRef.current) return
         setPhase("failed")
       }
     }, [])
+
+    const switchTier = async (next) => {
+      if (next === tier || tierBusy) return
+      setTierBusy(true)
+      try {
+        const payload = await post("/tier", { tier: next })
+        if (aliveRef.current && payload?.data?.tier) setTier(payload.data.tier)
+      } catch {}
+      finally {
+        if (aliveRef.current) setTierBusy(false)
+      }
+    }
 
     useEffect(() => {
       aliveRef.current = true
@@ -2723,10 +2823,18 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     useEffect(() => {
       if (!open) return
       const onPointerDown = (event) => {
-        if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false)
+        if (rootRef.current && !rootRef.current.contains(event.target)) {
+          setOpen(false)
+          setConfirmFrom(null)
+          setDeletingIndex(null)
+        }
       }
       const onKeyDown = (event) => {
-        if (event.key === "Escape") setOpen(false)
+        if (event.key === "Escape") {
+          setOpen(false)
+          setConfirmFrom(null)
+          setDeletingIndex(null)
+        }
       }
       document.addEventListener("mousedown", onPointerDown)
       document.addEventListener("keydown", onKeyDown)
@@ -2736,13 +2844,14 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       }
     }, [open])
 
-    const commit = async (next) => {
+    const commit = async (next, onSuccess) => {
       setSaving(true)
       setSaveFailed(false)
       try {
         const payload = await put("/alias", { entries: next })
         const data = payload?.data ?? {}
         setEntries(Array.isArray(data.entries) ? data.entries : next)
+        if (typeof onSuccess === "function") onSuccess()
       } catch {
         setSaveFailed(true)
       } finally {
@@ -2757,15 +2866,26 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const add = () => {
       if (!canAdd) return
       const exists = entries.some((entry) => entry.from === from)
+      if (exists && confirmFrom !== from) {
+        setConfirmFrom(from)
+        return
+      }
+      setConfirmFrom(null)
       const next = exists
         ? entries.map((entry) => (entry.from === from ? { from, to } : entry))
         : entries.concat([{ from, to }])
-      setFromInput("")
-      setToInput("")
-      void commit(next)
+      void commit(next, () => {
+        setFromInput("")
+        setToInput("")
+      })
     }
 
     const removeAt = (index) => {
+      if (deletingIndex !== index) {
+        setDeletingIndex(index)
+        return
+      }
+      setDeletingIndex(null)
       void commit(entries.filter((_, i) => i !== index))
     }
 
@@ -2792,19 +2912,43 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         style: ALIAS.row,
         "aria-haspopup": "dialog",
         "aria-expanded": open ? "true" : "false",
-        title: T.aliasTitle,
+        title: T.dockPopoverTitle,
         onClick: () => { setOpen((value) => !value) },
-      }, statusText()),
+      },
+        h("span", { style: { fontWeight: 600, color: tk.label } }, T.breaklimitButton),
+        h("span", { style: { color: tk.label2 } }, "·"),
+        h("span", null, statusText())),
       open
-        ? h("div", { role: "dialog", "aria-label": T.aliasTitle, style: ALIAS.panel },
+        ? h("div", { role: "dialog", "aria-label": T.dockPopoverTitle, style: ALIAS.panel },
             h("div", { style: ALIAS.head },
-              h("h3", { style: ALIAS.title }, T.aliasTitle),
+              h("h3", { style: ALIAS.title }, T.dockPopoverTitle),
               h("button", {
                 type: "button",
                 style: ALIAS.close,
                 "aria-label": T.aliasClose,
                 onClick: () => { setOpen(false) },
               }, "\u00D7")),
+
+            // 提示词模式快速切换
+            h("div", { style: ALIAS.subhead }, T.dockModeTitle),
+            h("div", { style: ALIAS.modeRow },
+              h("button", {
+                type: "button",
+                style: tier === "recommended" ? merge(ALIAS.modeBtn, ALIAS.modeBtnActive) : ALIAS.modeBtn,
+                disabled: tierBusy,
+                onClick: () => { void switchTier("recommended") },
+              }, T.modeRecommended),
+              h("button", {
+                type: "button",
+                style: tier === "unrestricted" ? merge(ALIAS.modeBtn, ALIAS.modeBtnActive) : ALIAS.modeBtn,
+                disabled: tierBusy,
+                onClick: () => { void switchTier("unrestricted") },
+              }, T.modeUnrestricted)),
+
+            h("div", { style: ALIAS.divider }),
+
+            // 目标词表轻量管理
+            h("div", { style: ALIAS.subhead }, T.aliasTitle),
             h("p", { style: ALIAS.desc }, T.aliasDesc),
             h("ul", { style: ALIAS.list },
               entries.length === 0
@@ -2819,16 +2963,22 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                     entry.to),
                   h("button", {
                     type: "button",
-                    style: ALIAS.remove,
+                    style: deletingIndex === index ? merge(ALIAS.remove, { color: tk.error, fontWeight: 600 }) : ALIAS.remove,
+                    title: deletingIndex === index ? T.confirmDeleteAlias(entry.from) : undefined,
                     onClick: () => { removeAt(index) },
-                  }, T.aliasRemove)))),
+                  }, deletingIndex === index ? T.aliasConfirmDelete : T.aliasRemove)))),
+            confirmFrom !== null
+              ? h("div", { style: ALIAS.warnBox },
+                  h("span", null, T.confirmOverwriteAlias(confirmFrom)),
+                  h("button", { type: "button", style: ALIAS.confirmBtn, onClick: add }, T.save))
+              : null,
             h("div", { style: ALIAS.form },
               h("input", {
                 style: ALIAS.input,
                 placeholder: T.aliasFrom,
                 "aria-label": T.aliasFrom,
                 value: fromInput,
-                onChange: (event) => { setFromInput(event.target.value) },
+                onChange: (event) => { setFromInput(event.target.value); setConfirmFrom(null) },
                 onKeyDown,
               }),
               h("input", {
@@ -2867,7 +3017,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       name: "conversation.input.dock",
       id: "breaklimit-alias",
       order: 10,
-      label: () => { refreshText(); return T.aliasTitle },
+      label: () => { refreshText(); return T.breaklimitButton },
     }, AliasRow))
   }
 
