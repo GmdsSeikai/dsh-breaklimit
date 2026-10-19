@@ -102,6 +102,10 @@ function failure(code, message, extra = {}) {
   return { ok: false, code, message, reason: message, ...extra }
 }
 
+function corruptIndexFailure() {
+  return failure('index_corrupt', '规则清单已损坏，插件已停止写入以保护原数据')
+}
+
 /** 清单版本冲突：读写之间有人改过 rules.json。 */
 function conflictError() {
   const error = new Error('规则清单在读写之间被改动，本次写入已取消')
@@ -275,12 +279,20 @@ export function readIndex(home) {
  * @param {string} home - $DSH_HOME。
  * @param {object} index - 新清单内容。
  * @param {number} [expectedRevision] - 读到的版本号；缺省时按当前版本自增。
+ * @param {object} [options] - 写入选项。
+ * @param {boolean} [options.allowCorruptOverwrite] - 是否允许覆写损坏的清单（仅恢复流程可用）。
  * @returns {number} 写入后的版本号。
  */
-function writeIndex(home, index, expectedRevision) {
+function writeIndex(home, index, expectedRevision, { allowCorruptOverwrite = false } = {}) {
+  const current = readIndex(home)
+  if (current.kind === 'corrupt' && !allowCorruptOverwrite) {
+    const error = new Error('规则清单已损坏，插件已停止写入以保护原数据')
+    error.code = 'index_corrupt'
+    throw error
+  }
   const file = rulesIndexPath(home)
   const revision = expectedRevision === undefined
-    ? readIndex(home).revision + 1
+    ? current.revision + 1
     : expectedRevision + 1
   const payload = {
     version: INDEX_VERSION,
@@ -317,11 +329,11 @@ function writeIndex(home, index, expectedRevision) {
 }
 
 /** 把 writeIndex 的抛出翻成调用方读的失败形状。 */
-function indexWriteFailure(error, what) {
+function indexWriteFailure(error, what, extra = {}) {
   if (error?.code === 'conflict') {
-    return failure('conflict', `${what}失败：${messageOf(error)}`)
+    return failure('conflict', `${what}失败：${messageOf(error)}`, extra)
   }
-  return failure('index_write_failed', `${what}失败：${messageOf(error)}`)
+  return failure('index_write_failed', `${what}失败：${messageOf(error)}`, extra)
 }
 
 /**
@@ -417,6 +429,7 @@ export function saveRule(home, id, text, meta) {
 
 function saveRuleLocked(home, id, text, meta) {
   const index = readIndex(home)
+  if (index.kind === 'corrupt') return corruptIndexFailure()
   const existing = index.rules.find(rule => rule.id === id)
   const normalized = normalizeMeta(id, meta ?? existing ?? {})
   const previousBody = readRule(home, id)
@@ -426,7 +439,11 @@ function saveRuleLocked(home, id, text, meta) {
     fs.mkdirSync(bodiesDir(home), { recursive: true })
     atomicWrite(ruleTextPath(home, id), text)
   } catch (error) {
-    return failure('body_write_failed', `写入正文失败：${messageOf(error)}`)
+    return failure('body_write_failed', `写入正文失败：${messageOf(error)}`, {
+      bodyWritten: false,
+      indexWritten: false,
+      landingSynced: false,
+    })
   }
 
   const entry = {
@@ -442,7 +459,11 @@ function saveRuleLocked(home, id, text, meta) {
   try {
     revision = writeIndex(home, { ...index, rules }, index.revision)
   } catch (error) {
-    return indexWriteFailure(error, '写入清单')
+    return indexWriteFailure(error, '写入清单', {
+      bodyWritten: true,
+      indexWritten: false,
+      landingSynced: false,
+    })
   }
 
   // 正在激活的规则被改正文时，同步落点；顺序是「清单 → 落点」，因为这一步失败留下
@@ -457,7 +478,11 @@ function saveRuleLocked(home, id, text, meta) {
         atomicWrite(targetPath(home, target), text)
         landingSynced = true
       } catch (error) {
-        return failure('landing_write_failed', `同步写入文件失败：${messageOf(error)}`)
+        return failure('landing_write_failed', `同步写入文件失败：${messageOf(error)}`, {
+          bodyWritten: true,
+          indexWritten: true,
+          landingSynced: false,
+        })
       }
     } else {
       landingStale = true
@@ -600,9 +625,10 @@ export function activateRule(home, id) {
 }
 
 function activateRuleLocked(home, id) {
+  const index = readIndex(home)
+  if (index.kind === 'corrupt') return corruptIndexFailure()
   const loaded = readRule(home, id)
   if (!loaded.ok) return loaded
-  const index = readIndex(home)
   // 清单里这条的 target 非法、读取时回落成 AGENTS.md：按回落值激活就是静默改写。
   const badTarget = index.invalidTargets.find(item => item.id === id)
   if (badTarget !== undefined) return invalidTargetFailure(badTarget.target)
@@ -734,6 +760,7 @@ function activateRuleLocked(home, id) {
 export function deactivateRule(home) {
   return withRulesLock(home, 'deactivate', () => {
     const index = readIndex(home)
+    if (index.kind === 'corrupt') return corruptIndexFailure()
     const skipped = []
     let settlement = { removed: false, restored: false, skipped: [] }
     if (index.active !== null) {
@@ -779,6 +806,7 @@ export function deleteRule(home, id) {
   if (!isValidRuleId(id)) return { ok: false, reason: `非法规则 id：${id}` }
   return withRulesLock(home, 'delete', () => {
     const index = readIndex(home)
+    if (index.kind === 'corrupt') return corruptIndexFailure()
     const wasActive = index.active === id
     const settlement = wasActive
       ? settleLanding(home, index.landing, activeRuleTextOrNull(home))
@@ -828,6 +856,7 @@ export function deleteRule(home, id) {
 export function resetRules(home) {
   return withRulesLock(home, 'reset', () => {
     const index = readIndex(home)
+    if (index.kind === 'corrupt') return corruptIndexFailure()
     const skipped = []
     if (index.active !== null) {
       const settlement = settleLanding(home, index.landing, activeRuleTextOrNull(home))
@@ -859,6 +888,7 @@ export function resetRules(home) {
  */
 export function ensureInitialState(home) {
   const index = readIndex(home)
+  if (index.kind === 'corrupt') return { active: null, imported: null, corrupt: true }
   if (index.rules.length > 0) return { active: index.active, imported: null }
   for (const target of RULE_TARGETS) {
     const text = readTarget(home, target)
@@ -870,4 +900,64 @@ export function ensureInitialState(home) {
     return { active: activated.ok ? id : null, imported: id }
   }
   return { active: null, imported: null }
+}
+
+/**
+ * 恢复损坏的规则清单：将损坏的 rules.json 备份到 $DSH_HOME/dsh-breaklimit-backup/<时间戳>/rules.json，
+ * 校验字节一致后，重置为空清单结构。
+ *
+ * @param {string} home - $DSH_HOME。
+ * @returns {{ ok: true, backupPath: string, backupBytes: number, rulesIndex: 'ok' }
+ *   | { ok: false, code: string, message: string, reason: string }}
+ */
+export function recoverCorruptIndex(home) {
+  return withRulesLock(home, 'recover', () => {
+    const current = readIndex(home)
+    if (current.kind !== 'corrupt') {
+      return failure('index_not_corrupt', '规则清单未损坏，无需恢复')
+    }
+    const file = rulesIndexPath(home)
+    if (!fs.existsSync(file)) {
+      return failure('index_missing', '规则清单文件不存在')
+    }
+    let sourceStat
+    try {
+      sourceStat = fs.statSync(file)
+    } catch (error) {
+      return failure('stat_failed', `读取原清单信息失败：${messageOf(error)}`)
+    }
+
+    const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
+    const backupDir = path.join(home, 'dsh-breaklimit-backup', stamp)
+    const backupFile = path.join(backupDir, 'rules.json')
+
+    try {
+      fs.mkdirSync(backupDir, { recursive: true })
+      fs.copyFileSync(file, backupFile)
+      const backupStat = fs.statSync(backupFile)
+      if (backupStat.size !== sourceStat.size) {
+        throw new Error(`备份大小不符：期望 ${String(sourceStat.size)}，实际 ${String(backupStat.size)}`)
+      }
+    } catch (error) {
+      try {
+        fs.rmSync(backupDir, { recursive: true, force: true })
+      } catch {
+        // 清理失败不盖住原始错误。
+      }
+      return failure('backup_failed', `备份原清单失败：${messageOf(error)}`)
+    }
+
+    try {
+      writeIndex(home, emptyIndex(), undefined, { allowCorruptOverwrite: true })
+    } catch (error) {
+      return failure('reset_failed', `重置空清单失败：${messageOf(error)}`)
+    }
+
+    return {
+      ok: true,
+      backupPath: backupFile,
+      backupBytes: sourceStat.size,
+      rulesIndex: 'ok',
+    }
+  })
 }

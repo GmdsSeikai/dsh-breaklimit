@@ -334,6 +334,7 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
           message: redactPathInText(status.inject.message, status.inject.file),
         },
         lock: { ...status.lock, file: redactPath(status.lock.file) },
+        rulesIndexPath: redactPath(status.rulesIndexPath),
       })
     },
 
@@ -465,6 +466,8 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
     'GET /rules/status': () => envelope(200, 'ok', '', {
       active: rules.readActive(home()),
       rules: rules.listRules(home()),
+      rulesIndex: rules.readIndex(home()).kind,
+      rulesIndexPath: redactPath(rules.rulesIndexPath(home())),
     }),
 
     'GET /rules/read': (req) => {
@@ -485,7 +488,14 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
       const parsed = parseJsonBody(await readBody(req, bodyLimit))
       if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
       const saved = rules.saveRule(home(), parsed.id, parsed.text, { name: parsed.name, target: parsed.target })
-      if (!saved.ok) return envelope(400, 'rule_invalid', saved.reason)
+      if (!saved.ok) {
+        if (saved.code === 'index_corrupt') return envelope(409, 'index_corrupt', saved.reason)
+        return envelope(400, saved.code ?? 'rule_invalid', saved.reason, {
+          bodyWritten: saved.bodyWritten === true,
+          indexWritten: saved.indexWritten === true,
+          landingSynced: saved.landingSynced === true,
+        })
+      }
       // 成功契约：{ ok, id, meta: { name, target }, landingSynced, landingStale, landingMoved }。
       // 三个落点标志是布尔量，不是对象。meta 缺席时回落到请求里的值，不因为对端还没
       // 跟上就报 500——正文此时已经落盘，500 会让调用方以为没写成。
@@ -506,6 +516,10 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
       if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
       if (typeof parsed.id !== 'string' || parsed.id === '') {
         const cleared = rules.deactivateRule(home())
+        if (!cleared.ok) {
+          if (cleared.code === 'index_corrupt') return envelope(409, 'index_corrupt', cleared.reason)
+          return envelope(400, 'rule_invalid', cleared.reason)
+        }
         const view = { ...cleared, skipped: redactSettlement(cleared).skipped }
         if (cleared.kept === true) {
           const files = view.skipped.map(item => item.path).join('、')
@@ -520,7 +534,10 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
         return envelope(200, 'deactivated', `${parts.join('；')}。`, view)
       }
       const done = rules.activateRule(home(), parsed.id)
-      if (!done.ok) return envelope(400, 'rule_invalid', done.reason)
+      if (!done.ok) {
+        if (done.code === 'index_corrupt') return envelope(409, 'index_corrupt', done.reason)
+        return envelope(400, 'rule_invalid', done.reason)
+      }
       // 落点被外部改过时不能说「已保留」了事：snapshotKept 为 true 才是首次接管时
       // 的那份原文仍在；否则本次激活会直接覆盖落点上的内容。
       const switched = done.previousLanding?.skipped?.length > 0
@@ -544,7 +561,10 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
       const parsed = parseJsonBody(await readBody(req, bodyLimit))
       if (parsed === null) return envelope(400, 'invalid_json', '请求体不是合法 JSON。')
       const done = rules.deleteRule(home(), parsed.id)
-      if (!done.ok) return envelope(400, 'rule_invalid', done.reason)
+      if (!done.ok) {
+        if (done.code === 'index_corrupt') return envelope(409, 'index_corrupt', done.reason)
+        return envelope(400, 'rule_invalid', done.reason)
+      }
       // 落点被外部改过时快照不随规则删除清除，归属留在清单里；这一条必须说出来，
       // 否则用户以为删干净了，而盘上还躺着一份他不知道的原文。
       const kept = done.kept === true
@@ -556,7 +576,23 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
 
     'POST /rules/reset': () => {
       const done = rules.resetRules(home())
+      if (!done.ok) {
+        if (done.code === 'index_corrupt') return envelope(409, 'index_corrupt', done.reason)
+        return envelope(400, 'rule_invalid', done.reason)
+      }
       return envelope(200, 'reset', `已清空规则，移除 ${String(done.removed)} 个文件。`, done)
+    },
+
+    'POST /rules/recover-corrupt': () => {
+      const recovered = rules.recoverCorruptIndex(home())
+      if (!recovered.ok) {
+        return envelope(400, recovered.code ?? 'recovery_failed', recovered.reason)
+      }
+      return envelope(200, 'recovered', '规则清单已备份并重置为空清单。', {
+        backupPath: redactPath(recovered.backupPath),
+        backupBytes: recovered.backupBytes,
+        rulesIndex: recovered.rulesIndex,
+      })
     },
 
     // 接管开关的前端入口。与命令面板的 on/off 等价，幂等：把同一个值设两次

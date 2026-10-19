@@ -204,6 +204,8 @@ export function buildStatus(ctx, config, runtime) {
     http: { mounted: runtime.httpMounted },
     activeRule: rules.readActive(home),
     rules: rules.listRules(home),
+    rulesIndex: rules.readIndex(home).kind,
+    rulesIndexPath: rules.rulesIndexPath(home),
     // 权限分层取自宿主服务解析后的现值：本插件在 `cordis.patch.yml` 里声明的三档 ask
     // 会被 profile、home 与命令行三层整体覆盖，只有宿主自己的结果才说明接缝还收不收得到询问。
     permission: (() => {
@@ -343,6 +345,9 @@ export function formatStatusText(status) {
   }
   if (status.tier?.kind === 'corrupt') {
     lines.push(`  档位问题      tier_config_corrupt：$DSH_HOME/breaklimit/tier.json 读不出或内容非法，当前按缺省档 ${String(status.tier.active)} 生效`)
+  }
+  if (status.rulesIndex === 'corrupt') {
+    lines.push('  规则问题      rules_index_corrupt：$DSH_HOME/breaklimit/rules.json 读不出或版本不符，已停止写入以保护原数据')
   }
   if (status.stateProblem !== null && status.stateProblem !== undefined) {
     lines.push(`  记录问题      ${status.stateProblem.kind}${status.stateProblem.reason === null ? '' : `：${status.stateProblem.reason}`}`)
