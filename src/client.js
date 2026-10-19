@@ -1559,6 +1559,67 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
    * `{ type: "save", originalFrom, entry }` 或 `{ type: "delete", from }`。
    * 编辑时把原词改成另一个已有词条的原词，是合并：删掉原来那条，目标那条换成新值。
    */
+  // 浮窗的位置与尺寸：刷新后要回到原处，所以存本地；读到脏数据就回落默认值，
+  // 不让一条坏记录把开关按钮顶出屏幕。
+  const DOCK_LAYOUT_KEY = "bkl.dock.layout"
+  const DOCK_MARGIN = 12
+  const DOCK_MIN_WIDTH = 320
+  const DOCK_MIN_HEIGHT = 280
+  const DOCK_DEFAULT_WIDTH = 380
+
+  /** 视口尺寸：拿不到就按一个保守值算，避免浮窗落在 (0,0)。 */
+  function viewportSize() {
+    const width = typeof window !== "undefined" && Number(window.innerWidth) > 0 ? Number(window.innerWidth) : 1024
+    const height = typeof window !== "undefined" && Number(window.innerHeight) > 0 ? Number(window.innerHeight) : 768
+    return { width, height }
+  }
+
+  /** 把矩形夹进视口：比视口还大就缩到视口内，负坐标推回边距。 */
+  function clampDockRect(rect, viewport) {
+    const maxWidth = Math.max(DOCK_MIN_WIDTH, viewport.width - DOCK_MARGIN * 2)
+    const maxHeight = Math.max(DOCK_MIN_HEIGHT, viewport.height - DOCK_MARGIN * 2)
+    const width = Math.min(maxWidth, Math.max(DOCK_MIN_WIDTH, Number(rect?.width) || DOCK_DEFAULT_WIDTH))
+    const height = Math.min(maxHeight, Math.max(DOCK_MIN_HEIGHT, Number(rect?.height) || 460))
+    const x = Math.min(Math.max(DOCK_MARGIN, Number(rect?.x) || DOCK_MARGIN), Math.max(DOCK_MARGIN, viewport.width - width - DOCK_MARGIN))
+    const y = Math.min(Math.max(DOCK_MARGIN, Number(rect?.y) || DOCK_MARGIN), Math.max(DOCK_MARGIN, viewport.height - height - DOCK_MARGIN))
+    return { x, y, width, height }
+  }
+
+  /** 默认贴在右下：离输入框近，又不遮住它。 */
+  function defaultDockRect(viewport) {
+    const width = DOCK_DEFAULT_WIDTH
+    const height = Math.min(520, Math.max(DOCK_MIN_HEIGHT, viewport.height - 260))
+    return clampDockRect({ x: viewport.width - width - 24, y: viewport.height - height - 96, width, height }, viewport)
+  }
+
+  /** 读回来的值要么是完整的 v1 记录，要么是空：不合并半截字段。 */
+  function parseDockLayout(value) {
+    if (value === null || typeof value !== "object" || value.version !== 1) return { version: 1, rect: null }
+    const rect = value.rect
+    const usable = rect !== null && typeof rect === "object"
+      && [rect.x, rect.y, rect.width, rect.height].every((item) => Number.isFinite(item))
+      && rect.width > 0 && rect.height > 0
+    return { version: 1, rect: usable ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null }
+  }
+
+  function readDockLayout() {
+    try {
+      if (typeof localStorage === "undefined" || typeof localStorage.getItem !== "function") return { version: 1, rect: null }
+      return parseDockLayout(JSON.parse(localStorage.getItem(DOCK_LAYOUT_KEY) ?? "null"))
+    } catch {
+      return { version: 1, rect: null }
+    }
+  }
+
+  /** 存不下不影响这次使用：位置丢失比浮窗打不开轻。 */
+  function writeDockLayout(layout) {
+    try {
+      if (typeof localStorage !== "undefined" && typeof localStorage.setItem === "function") {
+        localStorage.setItem(DOCK_LAYOUT_KEY, JSON.stringify(layout))
+      }
+    } catch { /* 配额满或隐私模式，忽略 */ }
+  }
+
   function aliasNextEntries(entries, change) {
     const list = Array.isArray(entries) ? entries : []
     if (change?.type === "delete") return list.filter((item) => item.from !== change.from)
@@ -3937,24 +3998,70 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       textOverflow: "ellipsis",
       whiteSpace: "nowrap",
     },
+    // fixed + 视口坐标：祖先链上没有 transform，不会被 composer 的 overflow 裁掉。
     panel: {
-      position: "absolute",
-      left: 0,
-      bottom: "calc(100% + 8px)",
-      zIndex: 40,
+      position: "fixed",
+      zIndex: 60,
       boxSizing: "border-box",
-      width: 340,
-      maxWidth: "calc(100vw - 32px)",
+      display: "flex",
+      flexDirection: "column",
+      border: `1px solid ${tk.line2}`,
+      borderRadius: 8,
+      background: tk.layer1,
+      color: tk.label,
+      fontSize: 13,
+      boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
+      overflow: "hidden",
+    },
+    titlebar: {
+      flex: "none",
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      height: 38,
+      padding: "0 6px 0 12px",
+      borderBottom: `1px solid ${tk.line1}`,
+      background: tk.well,
+      cursor: "move",
+      touchAction: "none",
+      userSelect: "none",
+    },
+    pill: {
+      flex: "none",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "2px 9px 2px 7px",
+      borderRadius: 999,
+      fontSize: 11,
+      fontWeight: 600,
+      whiteSpace: "nowrap",
+    },
+    pillDot: { width: 5, height: 5, borderRadius: "50%", flex: "none" },
+    body: {
+      flex: 1,
+      minHeight: 0,
+      overflowY: "auto",
+      overscrollBehavior: "contain",
       padding: 16,
       display: "flex",
       flexDirection: "column",
       gap: 10,
-      border: `1px solid ${tk.line2}`,
-      borderRadius: 6,
-      background: tk.layer1,
-      color: tk.label,
-      fontSize: 13,
-      boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+    },
+    grip: {
+      flex: "none",
+      height: 14,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "flex-end",
+      paddingRight: 6,
+      cursor: "nwse-resize",
+      touchAction: "none",
+      color: tk.label3,
+      fontSize: 10,
+      letterSpacing: 1,
+      userSelect: "none",
+      background: tk.well,
     },
     head: { display: "flex", alignItems: "center", justifyContent: "space-between" },
     title: { margin: 0, fontSize: 13, fontWeight: 600, color: tk.label },
@@ -4048,6 +4155,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       cursor: "pointer",
     },
     form: { display: "flex", gap: 8 },
+    formStacked: { flexDirection: "column" },
     input: {
       flex: 1,
       minWidth: 0,
@@ -4092,7 +4200,10 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const [deletingIndex, setDeletingIndex] = useState(null)
     const [writeState, setWriteState] = useState(null)
     const [navHint, setNavHint] = useState(false)
+    // 浮窗的位置和尺寸存本地：关掉再打开回到原处，不用每次重新摆。
+    const [dockRect, setDockRect] = useState(() => readDockLayout().rect ?? defaultDockRect(viewportSize()))
     const rootRef = useRef(null)
+    const panelRef = useRef(null)
     const aliveRef = useRef(true)
 
     const load = useCallback(async () => {
@@ -4166,30 +4277,70 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     }, [fromInput, toInput])
 
     useEffect(() => {
-      if (!open) return
+      if (!open) return undefined
+      const close = () => {
+        setOpen(false)
+        setConfirmFrom(null)
+        setDeletingIndex(null)
+        setPendingTier(null)
+      }
+      // 浮窗是 fixed，可能压在页面任何位置：判断「点了外面」要看它自己和触发按钮。
       const onPointerDown = (event) => {
-        if (rootRef.current && !rootRef.current.contains(event.target)) {
-          setOpen(false)
-          setConfirmFrom(null)
-          setDeletingIndex(null)
-          setPendingTier(null)
-        }
+        const target = event.target
+        if (panelRef.current && typeof panelRef.current.contains === "function" && panelRef.current.contains(target)) return
+        if (rootRef.current && typeof rootRef.current.contains === "function" && rootRef.current.contains(target)) return
+        close()
       }
+      // 捕获阶段拦 Esc：宿主也在这层监听它关设置面板，冒泡阶段拦不住。
       const onKeyDown = (event) => {
-        if (event.key === "Escape") {
-          setOpen(false)
-          setConfirmFrom(null)
-          setDeletingIndex(null)
-          setPendingTier(null)
-        }
+        if (event.key !== "Escape") return
+        event.stopPropagation()
+        event.preventDefault()
+        close()
       }
-      document.addEventListener("mousedown", onPointerDown)
-      document.addEventListener("keydown", onKeyDown)
+      document.addEventListener("pointerdown", onPointerDown, true)
+      window.addEventListener("keydown", onKeyDown, true)
       return () => {
-        document.removeEventListener("mousedown", onPointerDown)
-        document.removeEventListener("keydown", onKeyDown)
+        document.removeEventListener("pointerdown", onPointerDown, true)
+        window.removeEventListener("keydown", onKeyDown, true)
       }
     }, [open])
+
+    // 视口变小后浮窗可能越界：夹回来，并且只夹不存，用户下次打开仍按他摆的位置。
+    useEffect(() => {
+      const onResize = () => { setDockRect((current) => clampDockRect(current, viewportSize())) }
+      window.addEventListener("resize", onResize)
+      return () => { window.removeEventListener("resize", onResize) }
+    }, [])
+
+    // 拖动与缩放共用一个手势：按下时记起点，移动时算偏移，松手才写盘。
+    const startGesture = (event, kind) => {
+      if (event.button !== 0) return
+      // 标题栏上的按钮不该带着窗口跑。
+      if (kind === "move" && event.target && typeof event.target.closest === "function"
+        && event.target.closest("button,input,select,a,textarea")) return
+      event.preventDefault()
+      const startX = event.clientX
+      const startY = event.clientY
+      const start = dockRect
+      const onMove = (moveEvent) => {
+        const dx = moveEvent.clientX - startX
+        const dy = moveEvent.clientY - startY
+        const next = kind === "move"
+          ? { ...start, x: start.x + dx, y: start.y + dy }
+          : { ...start, width: start.width + dx, height: start.height + dy }
+        setDockRect(clampDockRect(next, viewportSize()))
+      }
+      const finish = () => {
+        window.removeEventListener("pointermove", onMove)
+        window.removeEventListener("pointerup", finish)
+        window.removeEventListener("pointercancel", finish)
+        setDockRect((current) => { writeDockLayout({ version: 1, rect: current }); return current })
+      }
+      window.addEventListener("pointermove", onMove)
+      window.addEventListener("pointerup", finish)
+      window.addEventListener("pointercancel", finish)
+    }
 
     const commitChange = async (change, onSuccess) => {
       setWriteState(null)
@@ -4223,6 +4374,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       maxTerm: aliasStore.state.limits.maxTerm,
     })
     const canAdd = from !== "" && to !== "" && inputErrors.from === "" && inputErrors.to === "" && inputErrors.limit === "" && !saving
+    // 浮窗被拖窄以后，三个控件横排会把输入框挤到看不见：改成竖排。
+    const stacked = dockRect.width < 360
 
     const add = () => {
       if (!canAdd) return
@@ -4258,6 +4411,14 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       }
     }
 
+    const statusTone = () => {
+      const state = aliasStore.state
+      if (state.phase === "loading") return "idle"
+      if (state.phase === "failed" || state.stale) return "error"
+      if (state.entries.length === 0) return "idle"
+      return state.lastHits === 0 ? "warn" : "ok"
+    }
+
     const statusText = () => {
       const state = aliasStore.state
       if (state.phase === "loading") return T.aliasLoading
@@ -4268,6 +4429,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       if (state.lastHits === 0) return T.aliasStateMiss
       return T.aliasStateHit(state.entries.length)
     }
+    // 状态只算一次：胶囊底色、圆点和文案必须指向同一个状态。
+    const dockTone = statusTone()
 
     return h("div", { ref: rootRef, style: ALIAS.root },
       h("button", {
@@ -4282,15 +4445,36 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         h("span", { style: { color: tk.label2 } }, "·"),
         h("span", null, statusText())),
       open
-        ? h("div", { role: "dialog", "aria-label": T.dockPopoverTitle, style: ALIAS.panel },
-            h("div", { style: ALIAS.head },
-              h("h3", { style: ALIAS.title }, T.dockPopoverTitle),
+        ? h("div", {
+            ref: panelRef,
+            role: "dialog",
+            "aria-label": T.dockPopoverTitle,
+            style: merge(ALIAS.panel, {
+              left: `${dockRect.x}px`,
+              top: `${dockRect.y}px`,
+              width: `${dockRect.width}px`,
+              height: `${dockRect.height}px`,
+            }),
+          },
+            h("div", { style: ALIAS.titlebar, onPointerDown: (event) => { startGesture(event, "move") } },
+              h("span", { style: ALIAS.title }, T.dockPopoverTitle),
+              // 状态胶囊自带圆点：一个元素表达一件事，不再和独立圆点重复。
+              h("span", {
+                style: merge(ALIAS.pill, {
+                  background: TONE_SOFT[dockTone],
+                  color: dockTone === "idle" ? tk.label2 : TONE_COLOR[dockTone],
+                }),
+              },
+                h("span", { style: merge(ALIAS.pillDot, { background: dockTone === "idle" ? tk.line4 : TONE_COLOR[dockTone] }) }),
+                statusText()),
+              h("span", { style: { flex: 1, minWidth: 0 } }),
               h("button", {
                 type: "button",
                 style: ALIAS.close,
                 "aria-label": T.aliasClose,
                 onClick: () => { setOpen(false); setPendingTier(null) },
               }, "\u00D7")),
+            h("div", { style: ALIAS.body },
 
             // 提示词模式快速切换。点一下只是选中待切换项，确认后才提交。
             h("div", { style: ALIAS.subhead }, T.dockModeTitle),
@@ -4347,7 +4531,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                   h("span", null, T.confirmOverwriteAlias(confirmFrom)),
                   h("button", { type: "button", style: ALIAS.confirmBtn, onClick: add }, T.save))
               : null,
-            h("div", { style: ALIAS.form },
+            h("div", { style: stacked ? merge(ALIAS.form, ALIAS.formStacked) : ALIAS.form },
               h("input", {
                 style: ALIAS.input,
                 placeholder: T.aliasFrom,
@@ -4391,7 +4575,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                     setNavHint(true)
                   }
                 },
-              }, T.wordsManage)))
+              }, T.wordsManage))),
+            // 右下角缩放：拖手柄只改尺寸，位置不动。
+            h("div", { style: ALIAS.grip, onPointerDown: (event) => { startGesture(event, "resize") } }, "\u25E2"))
         : null)
   }
 
@@ -4438,5 +4624,11 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   exports.PromptBlock = PromptBlock
   exports.WordEditor = WordEditor
   exports.Dialog = Dialog
+  // 浮窗布局：夹边、默认位置、读回脏数据的回落，都是可以脱离 DOM 断言的行为。
+  exports.clampDockRect = clampDockRect
+  exports.defaultDockRect = defaultDockRect
+  exports.parseDockLayout = parseDockLayout
+  // 浮窗整棵组件：只有真正渲染一次，才能发现「定义顺序/初始化顺序」这类单测到不了的问题。
+  exports.AliasRow = AliasRow
   return module.exports
 }})

@@ -673,3 +673,82 @@ test('Dialog 不把焦点还给 body，也不在无可还对象时乱调 focus',
   harness.run()
   assert.equal(bodyFocused, false)
 })
+
+// 沙箱里造出来的对象原型不同，deepStrictEqual 会因此失败；统一折成纯 JSON 再比。
+const plain = value => JSON.parse(JSON.stringify(value))
+
+test('浮窗布局：脏记录回落为空，半截字段不合并', () => {
+  const { exported } = loadClient()
+  assert.deepEqual(plain(exported.parseDockLayout(null)), { version: 1, rect: null })
+  assert.deepEqual(plain(exported.parseDockLayout('nope')), { version: 1, rect: null })
+  assert.deepEqual(plain(exported.parseDockLayout({ version: 2, rect: { x: 1, y: 1, width: 10, height: 10 } })), { version: 1, rect: null })
+  assert.deepEqual(plain(exported.parseDockLayout({ version: 1, rect: { x: 'a', y: 1, width: 10, height: 10 } })), { version: 1, rect: null })
+  assert.deepEqual(plain(exported.parseDockLayout({ version: 1, rect: { x: 1, y: 1, width: 0, height: 10 } })), { version: 1, rect: null })
+  assert.deepEqual(
+    plain(exported.parseDockLayout({ version: 1, rect: { x: 5, y: 6, width: 380, height: 460 } })),
+    { version: 1, rect: { x: 5, y: 6, width: 380, height: 460 } },
+  )
+})
+
+test('浮窗夹边：负坐标推回边距，越界拉回视口，过大缩小，过小撑到最小值', () => {
+  const { exported } = loadClient()
+  const viewport = { width: 1280, height: 800 }
+  assert.deepEqual(
+    plain(exported.clampDockRect({ x: -50, y: -20, width: 380, height: 460 }, viewport)),
+    { x: 12, y: 12, width: 380, height: 460 },
+  )
+  assert.deepEqual(
+    plain(exported.clampDockRect({ x: 5000, y: 5000, width: 380, height: 460 }, viewport)),
+    { x: 1280 - 380 - 12, y: 800 - 460 - 12, width: 380, height: 460 },
+  )
+  const huge = plain(exported.clampDockRect({ x: 0, y: 0, width: 9999, height: 9999 }, viewport))
+  assert.deepEqual(huge, { x: 12, y: 12, width: 1280 - 24, height: 800 - 24 })
+  const tiny = plain(exported.clampDockRect({ x: 100, y: 100, width: 10, height: 10 }, viewport))
+  assert.deepEqual(tiny, { x: 100, y: 100, width: 320, height: 280 })
+  // 缺字段按默认宽度算，不产生 NaN 坐标。
+  const empty = plain(exported.clampDockRect({}, viewport))
+  assert.equal(Number.isFinite(empty.x) && Number.isFinite(empty.y), true)
+  assert.equal(empty.width, 380)
+})
+
+test('浮窗默认位置完整落在视口内，小视口也不例外', () => {
+  const { exported } = loadClient()
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 800, height: 600 }, { width: 480, height: 420 }]) {
+    const rect = plain(exported.defaultDockRect(viewport))
+    assert.equal(rect.x >= 12, true, `x 越界：${JSON.stringify(rect)}`)
+    assert.equal(rect.y >= 12, true, `y 越界：${JSON.stringify(rect)}`)
+    assert.equal(rect.x + rect.width <= viewport.width - 12, true, `右边越界：${JSON.stringify(rect)}`)
+    assert.equal(rect.y + rect.height <= viewport.height - 12, true, `底边越界：${JSON.stringify(rect)}`)
+  }
+})
+
+test('浮窗组件渲染一次不抛错：触发按钮与展开后的标题栏、状态胶囊、内容区都在', () => {
+  // 这条防的是「只有真正渲染才会暴露」的初始化顺序错误：常量在定义前被引用、
+  // 组件里某段表达式依赖尚未赋值的变量。单测不渲染就永远看不到。
+  let useStateCalls = 0
+  const { exported } = loadClient({}, {
+    // 第 6 个 useState 是 open；其余按初始值走，dockRect 的 initializer 要真的执行。
+    useState: (initial) => {
+      useStateCalls += 1
+      if (useStateCalls === 6) return [true, () => {}]
+      return [typeof initial === 'function' ? initial() : initial, () => {}]
+    },
+  })
+  const tree = exported.AliasRow({})
+  const nodes = mount(tree)
+  // 结构断言不碰文案：测试环境是英文界面，拿中文去比只会测到语言包。
+  const triggers = findAll(nodes, node => node.type === 'button' && node.props && node.props['aria-haspopup'] === 'dialog')
+  assert.equal(triggers.length, 1, '缺触发按钮')
+  const dialogs = findAll(nodes, node => node.props && node.props.role === 'dialog')
+  assert.equal(dialogs.length, 1, '应渲染一个对话框')
+  assert.equal(dialogs[0].props.style.position, 'fixed', '浮窗必须脱离文档流，否则会被 composer 裁掉')
+  assert.equal(typeof dialogs[0].props.style.left, 'string', '缺少视口横坐标')
+  assert.equal(typeof dialogs[0].props.style.top, 'string', '缺少视口纵坐标')
+  // 标题栏（可拖）、正文容器（可滚）、右下角把手：按样式找，不依赖子节点顺序。
+  const kids = dialogs[0].children.filter(Boolean)
+  const findByCursor = (value) => kids.find(kid => kid && kid.props && kid.props.style && kid.props.style.cursor === value)
+  assert.equal(Boolean(findByCursor('move')), true, '缺可拖动的标题栏')
+  assert.equal(Boolean(findByCursor('nwse-resize')), true, '缺右下角缩放把手')
+  const scroller = kids.find(kid => kid && kid.props && kid.props.style && kid.props.style.overflowY === 'auto')
+  assert.equal(Boolean(scroller), true, '缺可滚动的正文容器')
+})
