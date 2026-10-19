@@ -109,6 +109,11 @@ export function verifyDownloaded(repo, tag, sha, hostRoot, directory, outputFile
     delete env.DSH_BREAKLIMIT_HOST_ROOT
     delete env.GH_TOKEN
     delete env.GITHUB_TOKEN
+    // Git Bash's GNU tar treats Windows drive letters as remote archive hosts.
+    if (process.platform === 'win32') {
+      const pathKey = Object.keys(env).find(key => key.toUpperCase() === 'PATH') ?? 'PATH'
+      env[pathKey] = `${path.join(process.env.SystemRoot, 'System32')}${path.delimiter}${env[pathKey] ?? ''}`
+    }
     const checks = [
       [process.execPath, ['tools/lint-exports.mjs']],
       [process.execPath, ['tools/check-client.mjs']],

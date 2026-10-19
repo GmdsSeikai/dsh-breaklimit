@@ -67,7 +67,13 @@ test('打包只包含提交内容，可重复执行且不读取未提交的私�
   packRelease(repo, 'v0.9.2', sha, out)
   const before = fs.readdirSync(out).map(name => [name, fs.readFileSync(path.join(out, name))])
   assert.equal(verifyRelease(repo, 'v0.9.2', sha, out).sourceSha, sha)
-  packRelease(repo, 'v0.9.2', sha, out)
+  const savedTZ = process.env.TZ
+  try {
+    for (const zone of ['UTC0', 'UTC-8']) {
+      process.env.TZ = zone
+      packRelease(repo, 'v0.9.2', sha, out)
+    }
+  } finally { if (savedTZ === undefined) delete process.env.TZ; else process.env.TZ = savedTZ }
   for (const [name, bytes] of before) assert.deepEqual(fs.readFileSync(path.join(out, name)), bytes)
   assert.deepEqual(fs.readdirSync(out).sort(), ['SHA256SUMS.txt', 'dsh-breaklimit-0.9.2.zip', 'release-metadata.json'].sort())
   const extracted = extractRelease(repo, 'v0.9.2', sha, out, path.join(path.dirname(out), 'unpacked'))

@@ -68,8 +68,8 @@ export function resolveCandidate(repo, tag, expectedSha) {
 
 function releaseFiles(repo, metadata) {
   const name = `dsh-breaklimit-${metadata.version}.zip`
-  // Store entries without compression so independent Git/zlib builds produce the same bytes.
-  const archive = run('git', ['-C', repo, 'archive', '-0', '--format=zip', `--prefix=dsh-breaklimit-${metadata.version}/`, metadata.sourceSha], { encoding: 'buffer' })
+  // ZIP timestamps use local time. Fix UTC and avoid compression for reproducible bytes.
+  const archive = run('git', ['-C', repo, 'archive', '-0', '--format=zip', `--prefix=dsh-breaklimit-${metadata.version}/`, metadata.sourceSha], { encoding: 'buffer', env: { ...process.env, TZ: 'UTC0' } })
   const files = new Map([
     [name, archive],
     ['release-metadata.json', Buffer.from(`${JSON.stringify(metadata, null, 2)}\n`)],
@@ -108,7 +108,7 @@ export function extractRelease(repo, tag, expectedSha, directory, destination) {
   if (fs.existsSync(destination)) throw new Error('extraction destination already exists; use a new directory')
   fs.mkdirSync(destination, { recursive: true })
   const archive = path.resolve(directory, `dsh-breaklimit-${metadata.version}.zip`)
-  if (process.platform === 'win32') run('tar', ['-xf', archive, '-C', destination])
+  if (process.platform === 'win32') run(path.join(process.env.SystemRoot, 'System32', 'tar.exe'), ['-xf', archive, '-C', destination])
   else run('unzip', ['-q', archive, '-d', destination])
   return path.resolve(destination, `dsh-breaklimit-${metadata.version}`)
 }
