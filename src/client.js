@@ -312,6 +312,14 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       goContext: "调整提示词与规则",
 
       nextStep: "下一步",
+      nsRulesCorruptTitle: "规则清单读不出来",
+      nsRulesCorruptBody: "规则清单文件无法读取或版本不符，插件已停止写入以保护原数据。已有的正文文件完好保留在 bodies/ 目录中。你可以备份原清单并重置为空清单重新开始。",
+      recoverRules: "备份并重置清单",
+      confirmRecoverRulesTitle: "确认备份并重置规则清单？",
+      confirmRecoverRulesBody: "会将当前的损坏清单复制备份到 dsh-breaklimit-backup 目录下，并初始化一份空的规则清单。之前的正文文件仍在 bodies/ 中，重新创建同名规则会覆盖它们。",
+      confirmRecoverRulesYes: "备份并重置",
+      doneRecoverRules: "规则清单已重置",
+      doneRecoverRulesNext: (path) => `原损坏清单已备份至 ${String(path)}。正文文件仍在 bodies/ 目录下。`,
       nsBrokenTitle: "上次的应用记录读不出来",
       nsBrokenBody: "为了不把宿主改乱，插件暂停了应用和回退。不要反复点按钮；按安装说明里「回退与卸载」一节处理 DSH 数据目录下的 breaklimit 文件夹，再回来点「重新检查」。",
       nsRootTitle: "先告诉插件宿主源码在哪",
@@ -351,9 +359,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       rootSource: (s) => (s === "config" ? "来自插件配置" : s === "env" ? "来自环境变量" : s === "derived" ? "由宿主进程推导" : "未配置"),
       rootMissingShort: "还不知道宿主源码在哪",
       rowMode: "提示词模式",
-      rowModeHint: "只影响模型拿到的指令，不改沙箱档位。",
+      rowModeHint: "只影响模型拿到的指令与自我约束，不改变宿主执行权限。",
       rowSandbox: "沙箱档位",
-      sandboxTakeover: "这一档下插件会接管审批与工具门。",
+      sandboxTakeover: "完全权限（默认）：宿主已自动放行日常命令审批，工具与编辑受插件规则管控。",
       sandboxHost: "这一档下插件不放宽沙箱，审批交还宿主。",
       rowPreflight: "补丁预检",
       preOk: (n) => (Number(n) === 0 ? "通过，没有待写入的文件" : `通过，待写入 ${String(n)} 个文件`),
@@ -421,6 +429,15 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       whyNoneSelected: "一条补丁都没开，没有可写的内容。",
       whyNothing: "没有需要写入的文件：选中的补丁都已就位。",
       whyNotApplied: "还没有应用记录，没有可回退的内容。",
+      whyRulesCorrupt: "规则清单损坏，已暂停写入，请先备份并重置。",
+      rulesCorruptNotice: "规则清单读不出来，插件已停止写入以保护原数据。已有的正文文件完好保留在 bodies/ 目录中。",
+      confirmDiscardRuleTitle: "当前有未保存的规则草稿",
+      confirmDiscardRuleBody: "离开或切换后，未保存的规则改动将会丢失。确认放弃这些改动吗？",
+      confirmDiscardYes: "放弃修改",
+      confirmOverwriteRuleTitle: (id) => `确认覆盖规则「${String(id)}」？`,
+      confirmOverwriteRuleBody: "规则 ID 已存在。保存将替换原有的规则名称与正文，覆盖后原内容无法恢复。",
+      confirmOverwriteRuleYes: "确认覆盖",
+      openExistingRule: "打开已有的这条规则",
       confirmApplyTitle: (n) => `确认写入 ${String(n)} 个宿主源码文件？`,
       confirmApplyBody: "会改动下面这些文件。写之前先做快照；只要有一处对不上就整批不写；写完需要重启宿主。之后随时可以用「回退」恢复。",
       confirmApplyYes: (n) => `写入 ${String(n)} 个文件`,
@@ -447,10 +464,10 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       restartNoCommand: "没拿到启动命令，请按你平时的方式启动宿主。",
 
       modeTitle: "提示词模式",
-      modeDesc: "两档共用同一份破限正文；差别只有附加的自我约束和执行层上限。切换不用重启，从下一轮对话开始生效。",
+      modeDesc: "两档共用同一份破限正文；差别只有附加的自我约束和执行层上限。注意：提示词模式仅调整模型的自我约束，不降低宿主执行权限。切换不用重启，从下一轮对话开始生效。",
       modeRecommended: "推荐（常用破限）",
       modeUnrestricted: "完全解放（彻底破限）",
-      tagDefault: "默认",
+      tagDefault: "默认（提示词）",
       tagCurrent: "正在使用",
       tagPending: "待确认",
       modeRecFit: "破限正文照常生效，额外保留三条自我约束：不擅自扩大改动范围、不可逆操作先说后果、交付前给出验证证据。",
@@ -640,6 +657,14 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       goContext: "Adjust prompt & rules",
 
       nextStep: "Next step",
+      nsRulesCorruptTitle: "Rules index cannot be read",
+      nsRulesCorruptBody: "The rules index is unreadable or has an incompatible version. The plugin paused writes to protect existing data. Rule bodies remain safe in bodies/. You can back up the corrupt index and start fresh with an empty one.",
+      recoverRules: "Back up and reset index",
+      confirmRecoverRulesTitle: "Back up and reset rules index?",
+      confirmRecoverRulesBody: "The corrupt index file will be copied to dsh-breaklimit-backup and an empty index will be initialized. Existing rule bodies stay in bodies/; creating rules with the same ID will overwrite them.",
+      confirmRecoverRulesYes: "Back up and reset",
+      doneRecoverRules: "Rules index reset",
+      doneRecoverRulesNext: (path) => `Corrupt index backed up to ${String(path)}. Rule bodies remain in bodies/.`,
       nsBrokenTitle: "The last apply record cannot be read",
       nsBrokenBody: "To avoid damaging the host, apply and revert are paused. Do not keep retrying. Follow the Revert and uninstall section of the install guide for the breaklimit folder in your DSH data directory, then press Check again.",
       nsRootTitle: "Tell the plugin where the host source is",
@@ -679,9 +704,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       rootSource: (s) => (s === "config" ? "from plugin config" : s === "env" ? "from environment variable" : s === "derived" ? "derived from the host process" : "not set"),
       rootMissingShort: "host source folder not set",
       rowMode: "Prompt mode",
-      rowModeHint: "Affects only the instructions the model gets, not the sandbox level.",
+      rowModeHint: "Affects only the model prompt and self-constraints, not the host execution permissions.",
       rowSandbox: "Sandbox level",
-      sandboxTakeover: "At this level the plugin takes over approvals and the tool gate.",
+      sandboxTakeover: "Full access (default): Host automatically approves routine command approval; tools and edits are guided by plugin rules.",
       sandboxHost: "At this level the plugin does not widen the sandbox; approvals stay with the host.",
       rowPreflight: "Patch preflight",
       preOk: (n) => (Number(n) === 0 ? "passed, nothing to write" : `passed, ${String(n)} ${Number(n) === 1 ? "file" : "files"} to write`),
@@ -749,6 +774,15 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       whyNoneSelected: "No patch is on, so there is nothing to write.",
       whyNothing: "Nothing to write: the chosen patches are already in place.",
       whyNotApplied: "There is no apply record, so there is nothing to revert.",
+      whyRulesCorrupt: "Rules index is corrupt and writes are paused; back up and reset first.",
+      rulesCorruptNotice: "Rules index cannot be read; writes are paused to protect existing data. Rule bodies remain safe in bodies/.",
+      confirmDiscardRuleTitle: "Unsaved rule draft",
+      confirmDiscardRuleBody: "Unsaved changes to this rule will be lost if you switch or cancel. Discard these changes?",
+      confirmDiscardYes: "Discard changes",
+      confirmOverwriteRuleTitle: (id) => `Overwrite existing rule "${String(id)}"?`,
+      confirmOverwriteRuleBody: "A rule with this ID already exists. Saving will replace its name and body, and the previous content cannot be recovered.",
+      confirmOverwriteRuleYes: "Overwrite",
+      openExistingRule: "Open existing rule",
       confirmApplyTitle: (n) => `Write ${String(n)} host source ${Number(n) === 1 ? "file" : "files"}?`,
       confirmApplyBody: "The files below will change. Each is snapshotted first; if anything mismatches, nothing is written; restart the host afterwards. You can undo it with Revert at any time.",
       confirmApplyYes: (n) => `Write ${String(n)} ${Number(n) === 1 ? "file" : "files"}`,
@@ -775,10 +809,10 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       restartNoCommand: "Could not read the start command; start the host the way you usually do.",
 
       modeTitle: "Prompt mode",
-      modeDesc: "Both modes share the same jailbreak body; they differ only in the extra constraints and the execution limits. No restart needed; it applies from the next turn.",
+      modeDesc: "Both modes share the same jailbreak body; the difference is only extra self-constraints and execution limits. Note: Prompt modes only adjust self-constraints, not host execution permissions. Takes effect on the next turn without restart.",
       modeRecommended: "Recommended (everyday jailbreak)",
       modeUnrestricted: "Unrestricted (full jailbreak)",
-      tagDefault: "default",
+      tagDefault: "default (prompt)",
       tagCurrent: "in use",
       tagPending: "to confirm",
       modeRecFit: "The jailbreak body applies as usual, plus three self-imposed constraints: no unrequested scope creep, say what an irreversible step costs before taking it, show the evidence before claiming done.",
@@ -1133,6 +1167,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       mode: tier,
       rules: Array.isArray(status?.rules) ? status.rules : [],
       activeRule: typeof status?.activeRule === "string" ? status.activeRule : null,
+      rulesIndex: status?.rulesIndex ?? "ok",
+      rulesIndexPath: status?.rulesIndexPath ?? "",
       customPrompt: override?.userFileExists === true,
       restartPending: restart !== null,
     }
@@ -1140,6 +1176,15 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
   function nextStep(f, loadError) {
     if (loadError) return { tone: "error", title: loadError.title, body: loadError.next, primary: { label: T.retry, action: "retry" } }
+    if (f.rulesIndex === "corrupt") {
+      return {
+        tone: "error",
+        title: T.nsRulesCorruptTitle,
+        body: T.nsRulesCorruptBody,
+        primary: { label: T.recoverRules, action: "recoverRules" },
+        secondary: { label: T.recheck, action: "refresh" },
+      }
+    }
     if (f.broken) return { tone: "error", title: T.nsBrokenTitle, body: T.nsBrokenBody, primary: { label: T.recheck, action: "refresh" } }
     if (f.rootMissing) {
       return {
@@ -1222,6 +1267,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     if (action === "retry") return T.retry
     if (action === "goOverview") return T.goOverview
     if (action === "goPatches") return T.goPatches
+    if (action === "recoverRules") return T.recoverRules
     return T.recheck
   }
 
@@ -1721,7 +1767,14 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       noticeView ?? null)
   }
 
-  function RuleEditor({ edit, rules, activeRule, busy, onChange, onSave, onCancel }) {
+  function isRuleEditDirty(edit) {
+    if (edit === null || typeof edit !== "object") return false
+    const b = edit.baseline
+    if (!b) return edit.text.trim() !== "" || edit.name.trim() !== "" || (edit.isNew && edit.id.trim() !== "")
+    return edit.text !== b.text || edit.name !== b.name || edit.target !== b.target || (edit.isNew && edit.id !== b.id)
+  }
+
+  function RuleEditor({ edit, rules, activeRule, busy, onChange, onSave, onCancel, onOpenExisting }) {
     const idValid = RULE_ID_RE.test(edit.id)
     const idError = edit.isNew && edit.id !== "" && !idValid ? T.ruleIdBad : null
     const idTaken = edit.isNew && idValid && rules.some(rule => rule.id === edit.id)
@@ -1753,7 +1806,13 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           }),
           h("p", { id: "bkl-rule-id-hint", role: idError ? "alert" : undefined, style: idError ? S.fieldError : S.small },
             idError ?? (edit.isNew ? T.fieldIdHint : T.fieldIdLocked)),
-          idTaken ? h("p", { style: S.fieldWarn }, T.ruleIdTaken) : null),
+          idTaken
+            ? h("div", { style: merge(S.row, { marginTop: "4px" }) },
+                h("p", { style: merge(S.fieldWarn, { margin: 0 }) }, T.ruleIdTaken),
+                onOpenExisting
+                  ? h(Button, { kind: "quiet", size: "small", onClick: () => { onOpenExisting(edit.id) } }, T.openExistingRule)
+                  : null)
+            : null),
         h("div", { style: S.field },
           h("label", { htmlFor: "bkl-rule-name", style: S.fieldLabel }, T.fieldName),
           h("input", {
@@ -1788,7 +1847,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       saveWhy ? h("p", { id: "bkl-rule-save-why", style: S.small }, saveWhy) : null)
   }
 
-  function RulesBlock({ rules, activeRule, edit, busy, onNew, onEdit, onEditChange, onSave, onCancelEdit, onActivate, onDeactivate, onDelete, confirmView, noticeView }) {
+  function RulesBlock({ rules, activeRule, rulesIndex, edit, busy, onNew, onEdit, onEditChange, onSave, onCancelEdit, onActivate, onDeactivate, onDelete, onRecover, confirmView, noticeView }) {
+    const isCorrupt = rulesIndex === "corrupt"
+    const newWhy = busy ? T.whyBusy : isCorrupt ? T.whyRulesCorrupt : null
     return h(Card, {
       title: T.rulesTitle,
       titleId: "bkl-rules-title",
@@ -1797,13 +1858,24 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         ? null
         : h("div", { style: S.row },
           h(Tag, null, T.rulesCount(rules.length)),
-          edit === null ? h(Button, { size: "small", off: busy, reason: T.whyBusy, onClick: onNew }, T.newRule) : null),
+          edit === null ? h(Button, { size: "small", off: newWhy !== null, reason: newWhy, onClick: onNew }, T.newRule) : null),
     },
+      isCorrupt
+        ? h(Notice, {
+          notice: {
+            tone: "error",
+            title: T.nsRulesCorruptTitle,
+            next: T.rulesCorruptNotice,
+            action: "recoverRules",
+          },
+          onAction: onRecover,
+        })
+        : null,
       rules.length === 0 && edit === null
         ? h(Empty, {
           title: T.rulesEmptyTitle,
           body: T.rulesEmptyBody,
-          action: h(Button, { kind: "primary", off: busy, reason: T.whyBusy, onClick: onNew }, T.newFirstRule),
+          action: h(Button, { kind: "primary", off: newWhy !== null, reason: newWhy, onClick: onNew }, T.newFirstRule),
         })
         : null,
       rules.length === 0
@@ -1829,7 +1901,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           })),
       confirmView ?? null,
       noticeView ?? null,
-      edit === null ? null : h(RuleEditor, { edit, rules, activeRule, busy, onChange: onEditChange, onSave, onCancel: onCancelEdit }))
+      edit === null ? null : h(RuleEditor, { edit, rules, activeRule, busy, onChange: onEditChange, onSave, onCancel: onCancelEdit, onOpenExisting: onEdit }))
   }
 
   function ContextPage(props) {
@@ -1893,6 +1965,21 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       const timer = setInterval(() => { bump(value => value + 1) }, CLOCK_MS)
       return () => { clearInterval(timer) }
     }, [])
+
+    // 页面卸载或刷新时拦截未保存草稿。
+    useEffect(() => {
+      if (typeof window === "undefined" || typeof window.addEventListener !== "function") return undefined
+      const onBeforeUnload = (event) => {
+        const ruleDirty = isRuleEditDirty(ruleEdit)
+        const promptDirty = draft !== null && draft !== (typeof override?.text === "string" ? override.text : "")
+        if (ruleDirty || promptDirty) {
+          event.preventDefault()
+          event.returnValue = ""
+        }
+      }
+      window.addEventListener("beforeunload", onBeforeUnload)
+      return () => { window.removeEventListener("beforeunload", onBeforeUnload) }
+    }, [ruleEdit, draft, override])
 
     const clearNotice = useCallback((scope) => {
       const timer = noticeTimers.current[scope]
@@ -2013,6 +2100,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       else if (action === "goOverview") goTab("overview")
       else if (action === "copyRoot") void copy(T.nsRootSnippet, "next")
       else if (action === "copyRestart") void copyRestart()
+      else if (action === "recoverRules") askRecoverRules("next")
     }, [load, goTab, copy, copyRestart])
 
     const togglePatch = useCallback(async (id, next) => {
@@ -2144,30 +2232,61 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       return found?.name || id
     }
 
-    const newRule = () => {
-      clearNotice("rules")
-      setConfirm(null)
-      setRuleEdit({ isNew: true, id: "", name: "", target: RULE_TARGETS[0], text: "" })
+    const guardDirtyRule = (onProceed) => {
+      if (isRuleEditDirty(ruleEdit)) {
+        setConfirm({
+          scope: "rules",
+          tone: "danger",
+          title: T.confirmDiscardRuleTitle,
+          body: T.confirmDiscardRuleBody,
+          yes: T.confirmDiscardYes,
+          run: () => {
+            setConfirm(null)
+            onProceed()
+          },
+        })
+        return
+      }
+      onProceed()
     }
 
-    const editRule = (id) => {
+    const doNewRule = () => {
+      clearNotice("rules")
+      setConfirm(null)
+      const empty = { isNew: true, id: "", name: "", target: RULE_TARGETS[0], text: "" }
+      setRuleEdit({ ...empty, baseline: empty })
+    }
+
+    const newRule = () => {
+      guardDirtyRule(doNewRule)
+    }
+
+    const doEditRule = (id) => {
       setConfirm(null)
       void run("rules", async () => {
         const payload = await get(`/rules/read?id=${encodeURIComponent(id)}`)
         if (!mounted.current) return
-        setRuleEdit({
+        const initial = {
           isNew: false,
           id,
           name: typeof payload.data?.name === "string" && payload.data.name !== id ? payload.data.name : "",
           target: RULE_TARGETS.includes(payload.data?.target) ? payload.data.target : RULE_TARGETS[0],
           text: typeof payload.data?.text === "string" ? payload.data.text : "",
-        })
+        }
+        setRuleEdit({ ...initial, baseline: initial })
       })
     }
 
-    const saveRule = () => {
-      if (ruleEdit === null) return
-      const edit = ruleEdit
+    const editRule = (id) => {
+      if (ruleEdit !== null && !ruleEdit.isNew && ruleEdit.id === id) return
+      guardDirtyRule(() => { doEditRule(id) })
+    }
+
+    const cancelEdit = () => {
+      guardDirtyRule(() => { setRuleEdit(null) })
+    }
+
+    const doSaveRule = (edit) => {
       void run("rules", async () => {
         const payload = await post("/rules/save", { id: edit.id, name: edit.name.trim() || edit.id, target: edit.target, text: edit.text })
         const data = payload.data ?? {}
@@ -2182,6 +2301,27 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           notify("rules", notice)
         }
       }, true)
+    }
+
+    const saveRule = () => {
+      if (ruleEdit === null) return
+      const edit = ruleEdit
+      const idTaken = edit.isNew && f.rules.some(rule => rule.id === edit.id)
+      if (idTaken) {
+        setConfirm({
+          scope: "rules",
+          tone: "danger",
+          title: T.confirmOverwriteRuleTitle(edit.id),
+          body: T.confirmOverwriteRuleBody,
+          yes: T.confirmOverwriteRuleYes,
+          run: () => {
+            setConfirm(null)
+            doSaveRule(edit)
+          },
+        })
+        return
+      }
+      doSaveRule(edit)
     }
 
     const askActivate = (rule) => {
@@ -2239,6 +2379,26 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           if (!mounted.current) return
           setRuleEdit(prev => (prev !== null && prev.id === rule.id ? null : prev))
           notify("rules", { tone: "ok", title: T.doneDeleted(label) })
+        }, true),
+      })
+    }
+
+    const askRecoverRules = (scope = "next") => {
+      setConfirm({
+        scope,
+        tone: "danger",
+        title: T.confirmRecoverRulesTitle,
+        body: T.confirmRecoverRulesBody,
+        yes: T.confirmRecoverRulesYes,
+        run: () => run(scope, async () => {
+          const payload = await post("/rules/recover-corrupt", {})
+          const backupPath = payload.data?.backupPath ?? "dsh-breaklimit-backup"
+          notify(scope, {
+            tone: "ok",
+            title: T.doneRecoverRules,
+            next: T.doneRecoverRulesNext(backupPath),
+          })
+          await load()
         }, true),
       })
     }
@@ -2331,16 +2491,18 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         rules: {
           rules: f.rules,
           activeRule: f.activeRule,
+          rulesIndex: f.rulesIndex,
           edit: ruleEdit,
           busy,
           onNew: newRule,
           onEdit: editRule,
           onEditChange: setRuleEdit,
           onSave: saveRule,
-          onCancelEdit: () => { setRuleEdit(null) },
+          onCancelEdit: cancelEdit,
           onActivate: askActivate,
           onDeactivate: askDeactivate,
           onDelete: askDelete,
+          onRecover: () => { askRecoverRules("rules") },
           confirmView: confirmFor("rules"),
           noticeView: noticeFor("rules"),
         },
