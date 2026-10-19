@@ -2,6 +2,8 @@
 
 为 DeepSeek Harness 管理宿主补丁、提示词和规则集的插件，提供中英文 Web 设置页。
 
+当前版本 **0.9.3，内测版**。发布产物和验证边界见 [Releases](https://github.com/rumoii/dsh-breaklimit/releases)；正式版计划为 1.0.0。
+
 - **补丁可控**：逐条选择，应用前检查文件哈希与命中数，失败时尝试事务回滚。
 - **提示词可编辑**：提供 `recommended`（推荐）与 `unrestricted`（完全解放）两档，支持自定义正文。
 - **规则可切换**：管理多份规则，激活到 `AGENTS.md` 或 `CLAUDE.md`，撤销时检查外部改动。
@@ -28,7 +30,7 @@
 在你存放项目的目录执行：
 
 ```powershell
-git clone https://github.com/rumoii/dsh-breaklimit.git
+git clone --branch v0.9.3 --depth 1 https://github.com/rumoii/dsh-breaklimit.git
 $PluginRoot = (Resolve-Path .\dsh-breaklimit).Path
 $DshRoot = 'D:\host\deepseek-harness' # 改成你的宿主源码目录
 $env:DSH_BREAKLIMIT_HOST_ROOT = $DshRoot

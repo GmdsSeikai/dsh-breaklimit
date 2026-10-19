@@ -160,6 +160,58 @@ test('备份失败时不写空清单，原 rules.json 与损坏状态都保持�
   assert.equal(rules.readIndex(home).kind, 'corrupt')
 })
 
+test('同一秒多次恢复使用独立备份，不覆盖已有原件', (t) => {
+  const home = tempHome(t)
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-19T05:00:00Z').getTime() })
+  writeCorruptIndex(home, '{ first broken index')
+  const first = rules.recoverCorruptIndex(home)
+  assert.equal(first.ok, true)
+  writeCorruptIndex(home, '{ second broken index')
+  const second = rules.recoverCorruptIndex(home)
+  assert.equal(second.ok, true)
+  assert.notEqual(first.backupPath, second.backupPath)
+  assert.equal(fs.readFileSync(first.backupPath, 'utf8'), '{ first broken index')
+  assert.equal(fs.readFileSync(second.backupPath, 'utf8'), '{ second broken index')
+  const file = writeCorruptIndex(home, '{ third broken index')
+  t.mock.method(fs, 'copyFileSync', () => { throw new Error('backup write failed') })
+  assert.equal(rules.recoverCorruptIndex(home).code, 'backup_failed')
+  assert.equal(fs.readFileSync(first.backupPath, 'utf8'), '{ first broken index')
+  assert.equal(fs.readFileSync(second.backupPath, 'utf8'), '{ second broken index')
+  assert.equal(fs.readFileSync(file, 'utf8'), '{ third broken index')
+})
+
+test('备份大小相同但字节不同时拒绝重置原清单', (t) => {
+  const home = tempHome(t)
+  const original = '{ original broken index'
+  const file = writeCorruptIndex(home, original)
+  t.mock.method(fs, 'copyFileSync', (_source, destination) => {
+    fs.writeFileSync(destination, 'x'.repeat(Buffer.byteLength(original)))
+  })
+  const result = rules.recoverCorruptIndex(home)
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'backup_failed')
+  assert.equal(fs.readFileSync(file, 'utf8'), original)
+})
+
+test('重置失败时保留原清单和已完成的备份', (t) => {
+  const home = tempHome(t)
+  const original = '{ broken index before failed reset'
+  const file = writeCorruptIndex(home, original)
+  const rename = fs.renameSync
+  t.mock.method(fs, 'renameSync', (source, destination) => {
+    if (destination === file) throw new Error('simulated reset failure')
+    return rename(source, destination)
+  })
+  const result = rules.recoverCorruptIndex(home)
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'reset_failed')
+  assert.equal(fs.readFileSync(file, 'utf8'), original)
+  const backups = path.join(home, 'dsh-breaklimit-backup')
+  const names = fs.readdirSync(backups)
+  assert.equal(names.length, 1)
+  assert.equal(fs.readFileSync(path.join(backups, names[0], 'rules.json'), 'utf8'), original)
+})
+
 test('规则锁被占用时写入口返回 locked，正文与清单都不落盘', (t) => {
   const home = tempHome(t)
   const seeded = rules.saveRule(home, 'seed', 'existing body', { name: 'Seed', target: 'AGENTS.md' })

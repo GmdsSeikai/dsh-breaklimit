@@ -102,6 +102,9 @@ function restoreFromSnapshot(root, dir, targets, writeFile) {
         continue
       }
       writeFile(path.join(root, target), original)
+      if (readTextOrNull(path.join(root, target)) !== original) {
+        errors.push(`${target}: 恢复后内容复校验失败`)
+      }
     } catch (error) {
       errors.push(`${target}: ${String(error?.message ?? error)}`)
     }
@@ -636,6 +639,9 @@ export function revertPatches({ root, home, lock = sharedLock, writeFile = atomi
       try {
         writeFile(path.join(root, item.target), item.before)
         restoredThisRun.push(item.target)
+        if (readTextOrNull(path.join(root, item.target)) !== item.before) {
+          throw new Error(`回退后内容复校验失败：${item.target}`)
+        }
         progress = {
           ...progress,
           updatedAt: new Date().toISOString(),
@@ -653,6 +659,9 @@ export function revertPatches({ root, home, lock = sharedLock, writeFile = atomi
       }
     }
 
+    if (failures.length === 0 && !allTargetsAtBefore(root, state.files)) {
+      failures.push({ path: '', reason: '回退结束时仍有文件与原文不符，保留恢复记录' })
+    }
     if (failures.length > 0) {
       // 补偿用本次的备份把已写回的文件恢复到回退前。补偿本身可能失败，所以
       // 「哪些文件真的回到原文」不能从尝试次数推断，只能逐个读回来判定。
