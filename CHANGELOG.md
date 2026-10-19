@@ -1,5 +1,21 @@
 # 变更记录
 
+## 0.9.2 · 2026-10-19
+
+0.9 系列仍是内测线，正式版为 1.0.0；这一版是新手友好度评审后的收尾，不加新能力。
+
+- 规则清单损坏时不再被覆盖：`readIndex` 的 `corrupt` 判定现在被五个写入口与装载期一起读取，保存、激活、取消激活、删除、清空一律拒绝，`ensureInitialState` 不再自动导入。此前损坏的 `rules.json` 会被当成空清单写回，且装载时就会发生。
+- 新增恢复入口：`POST /breaklimit/rules/recover-corrupt` 在跨进程锁内把损坏清单复制到 `$DSH_HOME/dsh-breaklimit-backup/<YYYYMMDD-HHmmss>/rules.json`，核对字节数一致后写入空清单；备份失败或重置失败时原文件一个字节都不动。目录名取自本地时间。
+- 备份路径可定位：`GET /status`、`GET /rules/status` 的 `rulesIndexPath` 与恢复接口的 `backupPath` 改为相对 `$DSH_HOME` 的路径，界面显示为 `$DSH_HOME/dsh-breaklimit-backup/<时间戳>/rules.json`。其余路径仍只保留最后一段。
+- 规则编辑防丢：切换条目、取消、刷新或关闭页面前，脏草稿走二次确认，`beforeunload` 拦截。新建时填了已有 ID 会先弹覆盖确认，并可一键打开已有那条。
+- 规则错误按阶段翻译：`body_write_failed`、`index_write_failed`、`landing_write_failed` 分别说明正文是否已写、清单是否更新、目标文件是否同步；补上 `conflict`、`invalid_target`、`body_remove_failed` 三种码。清单损坏时不再同时显示「还没有规则」。
+- 聊天区入口改为「破限」按钮，点击打开浮窗，内含提示词模式与目标词表。档位切换失败会给出提示，成功后通知设置页刷新；词表覆盖与删除都有二次确认，保存失败保留输入。
+- 权限认知：概览的沙箱行在完全权限时写明「普通审批自动放行」，提示词模式说明补上「不改变宿主执行权限」。
+- 新增 `node src/cli.js --doctor`：只读检查八项——Node、pnpm、git、宿主根、宿主依赖、DSH 数据目录、Web 组合、插件注册，逐项给修复指引。README 的调用位置移到 profile 与插件就绪之后。
+- 测试 283 项：补上损坏索引五个写入口拒写、备份失败不重置、锁冲突不落盘、草稿脏判定的用例；doctor 的外部命令探测可注入，测试不再依赖 runner 装了什么。
+
+已知未修：规则存储的 revision CAS 窗口（只有不持锁写者可命中，实测无丢写），留到 1.0.0 之后。
+
 ## 0.9.1 · 2026-10-19
 
 0.9 系列仍是内测线，正式版为 1.0.0；这一版是缺陷收尾，加一条作用于请求的破限能力。
