@@ -2075,6 +2075,19 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       }
       return undefined
     }, [open])
+    // 宿主也在监听 Esc 关闭整个设置面板。不拦住它，一次 Esc 会同时关掉弹窗和设置页，
+    // 弹窗随面板卸载，焦点还原就没了对象。window 捕获阶段是唯一早于宿主的层。
+    useEffect(() => {
+      if (!open || typeof window === "undefined" || typeof window.addEventListener !== "function") return undefined
+      const onKeyDown = (event) => {
+        if (event.key !== "Escape") return
+        event.stopPropagation()
+        event.preventDefault()
+        onClose()
+      }
+      window.addEventListener("keydown", onKeyDown, true)
+      return () => { window.removeEventListener("keydown", onKeyDown, true) }
+    }, [open, onClose])
     useEffect(() => {
       const element = nodeRef.current
       if (element === null || typeof element.addEventListener !== "function") return undefined
