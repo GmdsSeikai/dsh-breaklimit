@@ -1597,7 +1597,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       }))
   }
 
-  function OverviewPage({ f, status, override, step, busy, enabledPending, restart, onRun, onGo, onToggleEnabled, nextNotice, overviewNotice, restartView }) {
+  function OverviewPage({ f, status, override, step, busy, enabledPending, restart, onRun, onGo, onToggleEnabled, nextNotice, overviewNotice, restartView, confirmView }) {
     const target = status?.target ?? {}
     const rootHint = status?.hostRoot ? `${T.rootSource(status.hostRootSource)}${T.sep}${String(status.hostRoot)}` : T.rootMissingShort
     let preValue = T.unknown
@@ -1613,6 +1613,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
     return h("div", { style: S.panel },
       restart === null ? h(NextStepCard, { step, busy, onRun, notice: nextNotice }) : restartView,
+      confirmView ?? null,
       h(Card, { title: T.stepsTitle, titleId: "bkl-steps-title", desc: T.stepsDesc },
         h(StepList, { items: stepItems(f), onGo })),
       h(Card, { title: T.statusTitle, titleId: "bkl-status-title", desc: T.statusDesc },
@@ -2528,6 +2529,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         step: nextStep(f, loadError),
         nextNotice: noticeFor("next"),
         overviewNotice: noticeFor("overview"),
+        // 「下一步」卡片上的按钮会开确认条（例如规则清单恢复）。少了这一行，
+        // 按钮点下去只把 confirm 写进 state，没有组件消费它，界面上什么都不会发生。
+        confirmView: confirmFor("next"),
         onRun: runAction,
         onGo: goTab,
         onToggleEnabled: (next) => { void toggleEnabled(next) },
@@ -3016,8 +3020,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
             pendingTier !== null
               ? h("div", { style: ALIAS.warnBox },
                   h("span", null, T.confirmModeTitle(modeLabel(pendingTier))),
-                  h("button", { type: "button", style: ALIAS.confirmBtn, onClick: confirmTier }, T.confirmModeYes),
-                  h("button", { type: "button", style: ALIAS.confirmBtn, onClick: () => { setPendingTier(null) } }, T.cancel))
+                  h("button", { type: "button", style: ALIAS.confirmBtn, "aria-label": T.confirmModeYes, onClick: confirmTier }, T.confirmModeYes),
+                  h("button", { type: "button", style: ALIAS.confirmBtn, "aria-label": T.cancel, onClick: () => { setPendingTier(null) } }, T.cancel))
               : null,
             pendingTier !== null ? h("p", { style: ALIAS.foot }, T.confirmModeBody) : null,
             tierFailed ? h("p", { style: ALIAS.fail }, T.dockTierFailed) : null,
