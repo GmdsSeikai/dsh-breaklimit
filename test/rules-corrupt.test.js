@@ -178,8 +178,11 @@ test('HTTP 接口：损坏时写操作返回 409 index_corrupt，recover 路由�
   // 备份路径必须能直接拿去磁盘上找：保留 dsh-breaklimit-backup/<时间戳>/rules.json
   // 三个层级，只把 $DSH_HOME 换成相对路径，不能折成 `…/rules.json`。
   const backupPath = recRes.payload.data.backupPath
-  assert.match(backupPath, /^dsh-breaklimit-backup\/\d{14}\/rules\.json$/u)
+  assert.match(backupPath, /^dsh-breaklimit-backup\/\d{8}-\d{6}\/rules\.json$/u)
   assert.equal(fs.existsSync(path.join(home, backupPath)), true)
+  // 目录名取自本地时间，不是 UTC：日期段应等于本机当天。
+  const localDay = new Date().toLocaleDateString('sv-SE').replace(/-/gu, '')
+  assert.equal(backupPath.split('/')[1].slice(0, 8), localDay)
 
   // 恢复后再读状态，rulesIndex 变成 ok
   const newStatus = await request(handler, 'GET', '/rules/status')

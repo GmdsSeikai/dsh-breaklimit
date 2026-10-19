@@ -927,7 +927,13 @@ export function recoverCorruptIndex(home) {
       return failure('stat_failed', `读取原清单信息失败：${messageOf(error)}`)
     }
 
-    const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
+    // 目录名用本地时间：用户是照着自己看到的时间去磁盘上找的，UTC 会差一个时区，
+    // 明明刚点完却看到一个几小时前的目录名。日期与时刻之间留一个连字符，8 位数字
+    // 和 6 位数字连写会读不出切分点。
+    const now = new Date()
+    const pad = value => String(value).padStart(2, '0')
+    const stamp = `${String(now.getFullYear())}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+      + `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
     const backupDir = path.join(home, 'dsh-breaklimit-backup', stamp)
     const backupFile = path.join(backupDir, 'rules.json')
 
