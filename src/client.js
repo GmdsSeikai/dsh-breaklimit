@@ -624,7 +624,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       confirmOverwriteAlias: (from) => `词条「${String(from)}」已存在，确定覆盖吗？`,
       confirmDeleteAlias: (from) => `确定删除词条「${String(from)}」吗？`,
       aliasTitle: "目标词表",
-      aliasDesc: "这里配的词会在请求发出前替换回原文里的真实目标名换成占位名。",
+      aliasDesc: "这里配的词，会在请求发出前把你消息里的真实目标名换成占位名。",
       aliasStateEmpty: "词表未配置",
       aliasStateFailed: "词表读取失败",
       aliasStateMiss: "本轮未替换",
