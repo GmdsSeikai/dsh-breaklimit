@@ -104,7 +104,8 @@ export function verifyDownloaded(repo, tag, sha, hostRoot, directory, outputFile
   try {
     const assetsDir = path.join(directory, 'assets')
     const extracted = extractRelease(repo, tag, sha, assetsDir, path.join(temp, 'extracted'))
-    const env = { ...process.env, DSH_HOME: path.join(temp, 'home'), DSH_BREAKLIMIT_HOST_ROOT: path.resolve(hostRoot) }
+    const env = { ...process.env, DSH_HOME: path.join(temp, 'home') }
+    delete env.DSH_BREAKLIMIT_HOST_ROOT
     delete env.GH_TOKEN
     delete env.GITHUB_TOKEN
     const checks = [
@@ -115,7 +116,13 @@ export function verifyDownloaded(repo, tag, sha, hostRoot, directory, outputFile
       [process.execPath, ['tools/reconcile.mjs', path.resolve(hostRoot)]],
       [process.execPath, ['tools/selfcheck.mjs', path.resolve(hostRoot)]],
     ]
-    for (const [file, args] of checks) process.stdout.write(run(file, args, { cwd: extracted, env, timeout: 300000 }))
+    for (const [file, args] of checks) {
+      try { process.stdout.write(run(file, args, { cwd: extracted, env, timeout: 300000 })) } catch (error) {
+        process.stdout.write(error.stdout ?? '')
+        process.stderr.write(error.stderr ?? '')
+        throw new Error(`Archive check failed: ${args.join(' ')} (exit ${String(error.status ?? error.code)})`, { cause: error })
+      }
+    }
     const assets = fs.readdirSync(assetsDir).sort().map(name => ({ name, sha256: sha256(fs.readFileSync(path.join(assetsDir, name))) }))
     const report = { ...metadata, draftId: snapshot.draftId, assets, checks: checks.map(([, args]) => args.join(' ')), verifiedAt: new Date().toISOString(),
       boundaries: ['Source and downloaded-archive checks only; real host installation, browser and sandbox acceptance are recorded separately.'] }

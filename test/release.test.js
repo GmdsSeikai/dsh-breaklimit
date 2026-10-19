@@ -6,9 +6,9 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { checkSource, extractRelease, packRelease, resolveCandidate, verifyRelease } from '../tools/release.mjs'
-import { checkDraft, downloadDraft, prepareDraft, requireDraft } from '../tools/github-release.mjs'
+import { checkDraft, downloadDraft, prepareDraft, requireDraft, verifyDownloaded } from '../tools/github-release.mjs'
 
-function fixture(t) {
+function fixture(t, customize = () => {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bkl-release-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const repo = path.join(root, 'source with spaces')
@@ -21,6 +21,7 @@ function fixture(t) {
     fs.mkdirSync(path.dirname(path.join(repo, name)), { recursive: true })
     fs.writeFileSync(path.join(repo, name), 'fixture\n')
   }
+  customize(repo)
   const git = args => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8', timeout: 10000 })
   git(['init', '--quiet'])
   git(['config', 'core.autocrlf', 'false'])
@@ -202,4 +203,30 @@ test('损坏的草稿附件不能生成已验证下载快照', t => {
   const downloaded = path.join(root, 'invalid-download')
   assert.throws(() => downloadDraft(repo, 'v0.9.2', sha, downloaded, call), /哈希/)
   assert.equal(fs.existsSync(path.join(downloaded, 'draft-snapshot.json')), false)
+})
+
+test('下载产物的真实子进程不继承宿主根与草稿凭据，固定宿主仅经参数传入', t => {
+  const { root, repo, sha } = fixture(t, source => {
+    const isolated = `import assert from 'node:assert/strict';
+      assert.equal('DSH_BREAKLIMIT_HOST_ROOT' in process.env, false, 'host root leaked into repository checks');
+      assert.equal('GH_TOKEN' in process.env, false);
+      assert.equal('GITHUB_TOKEN' in process.env, false);
+      assert.ok(process.env.DSH_HOME);
+    `
+    fs.writeFileSync(path.join(source, 'test/cli.test.js'), isolated)
+    fs.mkdirSync(path.join(source, 'tools'))
+    for (const name of ['lint-exports', 'check-client', 'check-doc-numbers', 'reconcile', 'selfcheck']) {
+      const explicitHost = ['reconcile', 'selfcheck'].includes(name) ? `assert.equal(process.argv[2], ${JSON.stringify(source)});` : ''
+      fs.writeFileSync(path.join(source, `tools/${name}.mjs`), isolated + explicitHost)
+    }
+  })
+  const directory = path.join(root, 'download')
+  packRelease(repo, 'v0.9.2', sha, path.join(directory, 'assets'))
+  fs.writeFileSync(path.join(directory, 'draft-snapshot.json'), JSON.stringify({ tag: 'v0.9.2', sourceSha: sha, draftId: 42 }))
+  for (const key of ['DSH_BREAKLIMIT_HOST_ROOT', 'GH_TOKEN', 'GITHUB_TOKEN']) {
+    const saved = process.env[key]
+    t.after(() => { if (saved === undefined) delete process.env[key]; else process.env[key] = saved })
+    process.env[key] = 'synthetic value that must not reach candidate code'
+  }
+  assert.equal(verifyDownloaded(repo, 'v0.9.2', sha, repo, directory, path.join(root, 'report.json')).draftId, 42)
 })
