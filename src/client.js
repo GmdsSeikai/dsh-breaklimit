@@ -2671,7 +2671,11 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   // 预览范围。预览输出是纯文本节点，用户输入永远不会被当成 HTML 执行。
 
   function WordsPage({ store, query, setQuery, previewText, setPreviewText, restartView, noticeView, onAdd, onEdit, onDelete, onRetryRead, onReturnChat, canReturn }) {
-    const locked = store.phase !== "ready" || store.stale || store.saving
+    // 读取失败和「正在保存」是两回事：前者是看不清现状，要报错并停写；
+    // 后者只是这一次写入还没回来。混成一个 locked 会让保存期间闪出「读取失败」。
+    const readFailed = store.phase !== "ready" || store.stale
+    const locked = readFailed || store.saving
+    const lockReason = readFailed ? T.wordsReadFailedTitle : store.saving ? T.wordSavingNote : undefined
     const entries = store.entries
     const limits = store.limits
     const needle = query.trim().toLowerCase()
@@ -2697,7 +2701,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           : null,
       },
         h("p", { style: S.small }, T.wordsScope)),
-      locked
+      readFailed
         ? h(Notice, {
           notice: {
             tone: "error",
@@ -2718,7 +2722,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
             h("span", { style: S.spacer }),
             h(Button, {
               kind: "primary", size: "small", label: T.wordsAdd,
-              off: locked, reason: locked ? T.wordsReadFailedTitle : undefined,
+              off: locked, reason: lockReason,
               onClick: onAdd,
             }, T.wordsAdd)),
           entries.length >= limits.maxEntries
@@ -2742,35 +2746,39 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                 : h("div", { style: S.wordSearchClear },
                   h(Button, { kind: "quiet", size: "small", label: T.wordsSearchClear, onClick: () => { setQuery("") } }, "\u00d7"))),
           ),
-          entries.length === 0
-            ? h(Empty, {
-              title: T.wordsEmptyTitle,
-              body: T.wordsEmptyBody,
-              action: h(Button, {
-                kind: "primary", size: "small", off: locked, label: T.wordsEmptyAdd, onClick: onAdd,
-              }, T.wordsEmptyAdd),
-            })
-            : rows.length === 0
+          // 读不出来时列表必然是空的，但「还没有词条」不成立：那是真的没配过。
+          // 两条提示同时出现，用户会以为加一条就能修好。
+          readFailed && entries.length === 0
+            ? null
+            : entries.length === 0
               ? h(Empty, {
-                title: T.wordsNoMatchTitle,
-                body: T.wordsNoMatchBody,
-                action: h(Button, { size: "small", onClick: () => { setQuery("") } }, T.wordsSearchClear),
+                title: T.wordsEmptyTitle,
+                body: T.wordsEmptyBody,
+                action: h(Button, {
+                  kind: "primary", size: "small", off: locked, label: T.wordsEmptyAdd, onClick: onAdd,
+                }, T.wordsEmptyAdd),
               })
-              : h("ul", { style: merge(S.wordList, store.stale && S.wordStale), "aria-labelledby": "bkl-words-list-title" },
-                rows.map((item, row) => h("li", { key: `${String(item.index)}:${item.entry.from}`, style: merge(S.wordRow, row === 0 && S.wordRowFirst) },
-                  h("div", { style: S.wordCells },
-                    h("span", { style: S.wordCell }, item.entry.from),
-                    h("span", { "aria-hidden": "true", style: { color: tk.label3 } }, "\u2192"),
-                    h("span", { style: S.wordCell }, item.entry.to)),
-                  h("div", { style: S.wordActions },
-                    h(Button, {
-                      kind: "quiet", size: "small", label: T.wordsEditLabel(item.entry.from),
-                      off: locked, onClick: () => { onEdit(item.index) },
-                    }, T.edit),
-                    h(Button, {
-                      kind: "quietDanger", size: "small", label: T.wordsDeleteLabel(item.entry.from),
-                      off: locked, onClick: () => { onDelete(item.index) },
-                    }, T.del))))),
+              : rows.length === 0
+                ? h(Empty, {
+                  title: T.wordsNoMatchTitle,
+                  body: T.wordsNoMatchBody,
+                  action: h(Button, { size: "small", onClick: () => { setQuery("") } }, T.wordsSearchClear),
+                })
+                : h("ul", { style: merge(S.wordList, store.stale && S.wordStale), "aria-labelledby": "bkl-words-list-title" },
+                  rows.map((item, row) => h("li", { key: `${String(item.index)}:${String(item.entry.from)}`, style: merge(S.wordRow, row === 0 && S.wordRowFirst) },
+                    h("div", { style: S.wordCells },
+                      h("span", { style: S.wordCell }, String(item.entry.from)),
+                      h("span", { "aria-hidden": "true", style: { color: tk.label3 } }, "\u2192"),
+                      h("span", { style: S.wordCell }, String(item.entry.to))),
+                    h("div", { style: S.wordActions },
+                      h(Button, {
+                        kind: "quiet", size: "small", label: T.wordsEditLabel(item.entry.from),
+                        off: locked, onClick: () => { onEdit(item.index) },
+                      }, T.edit),
+                      h(Button, {
+                        kind: "quietDanger", size: "small", label: T.wordsDeleteLabel(item.entry.from),
+                        off: locked, onClick: () => { onDelete(item.index) },
+                      }, T.del))))),
           h("p", { style: S.small }, T.wordsEachSave)),
         h("aside", { style: merge(S.card, S.wordAside), "aria-labelledby": "bkl-words-preview-title" },
           h("h3", { id: "bkl-words-preview-title", style: S.cardTitle }, T.wordsPreviewTitle),
