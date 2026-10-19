@@ -32,14 +32,21 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   const NOTICE_OK_MS = 5000
   const CLOCK_MS = 30000
   const STYLE_ID = "bkl-scoped-style"
-  const TAB_KEYS = ["overview", "patches", "context"]
+  const TAB_KEYS = ["overview", "patches", "prompt", "rules", "words"]
   const MODES = ["recommended", "unrestricted"]
   const RULE_TARGETS = ["AGENTS.md", "CLAUDE.md"]
   const RULE_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/
   const LIST_LIMIT = 5
+  // 词库上限与 host/masks.js 一致（MAX_MASKS / MAX_MASK_TERM）；
+  // GET /alias 会带回后端实测的 limits，取到后用后端的值。
+  const WORDS_MAX = 100
+  const WORD_TERM_MAX = 64
   // 浮窗与设置页是两个挂载点、两份 state。浮窗改了档位，设置页那份就旧了；
   // 用一个自定义事件把「后端状态变了」传过去，不把 load 从设置页里导出来。
   const STATE_CHANGED_EVENT = "bkl:state-changed"
+  // 浮窗的「管理词库」要把设置分区切到词库页。设置分区挂载时才有 state，
+  // 所以除了事件，还在模块级记一份待落地的页签，设置分区一挂载就消费它。
+  const NAVIGATE_EVENT = "bkl:navigate"
 
   // ---- 宿主令牌 ------------------------------------------------------------
   //
@@ -98,7 +105,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     headAside: { display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 },
     stamp: { font: tk.fontSmall, color: tk.caption, whiteSpace: "nowrap" },
 
-    tablist: { display: "flex", flexWrap: "wrap", columnGap: "24px", borderBottom: `0.5px solid ${tk.line2}` },
+    tablist: { display: "flex", columnGap: "24px", overflowX: "auto", scrollbarWidth: "thin", borderBottom: `0.5px solid ${tk.line2}` },
     tab: {
       appearance: "none", background: "transparent", border: "none", borderBottom: "2px solid transparent",
       margin: 0, padding: "8px 0 7px", cursor: "pointer", font: tk.font, color: tk.label3,
@@ -158,13 +165,6 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     banner: { display: "flex", flexDirection: "column", gap: "8px", padding: "12px 14px", borderRadius: tk.rMd, border: `0.5px solid ${tk.line2}` },
     bannerHead: { display: "flex", alignItems: "center", gap: "8px" },
     bannerTitle: { margin: 0, font: tk.fontStrong, color: tk.label, flex: "1 1 auto", minWidth: 0 },
-
-    confirm: {
-      display: "flex", flexDirection: "column", gap: "8px", padding: "12px 14px",
-      borderRadius: tk.rSm, background: tk.well, border: `0.5px solid ${tk.line3}`,
-    },
-    confirmTitle: { margin: 0, font: tk.fontStrong, color: tk.label },
-
     list: { margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" },
     pathList: { margin: 0, padding: "6px 10px", listStyle: "none", display: "flex", flexDirection: "column", gap: "2px", borderRadius: tk.rSm, background: tk.well },
     pathItem: { font: tk.fontSmall, fontFamily: tk.mono, color: tk.label2, wordBreak: "break-all" },
@@ -205,7 +205,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     patch: { display: "flex", flexDirection: "column", gap: "8px", padding: "14px 16px", background: tk.layer1, border: `0.5px solid ${tk.line2}`, borderRadius: tk.rMd },
     patchHead: { display: "flex", alignItems: "flex-start", gap: "16px" },
     patchMain: { display: "flex", flexDirection: "column", gap: "4px", flex: "1 1 auto", minWidth: 0 },
-    patchTitle: { font: tk.fontStrong, color: tk.label },
+    patchTitle: { font: tk.fontStrong, color: tk.label, overflowWrap: "anywhere" },
     patchSwitch: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", flexShrink: 0, paddingTop: "1px" },
     switchHint: { font: tk.fontSmall, color: tk.label3, whiteSpace: "nowrap" },
     patchMeta: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", font: tk.fontSmall, color: tk.label3 },
@@ -246,13 +246,72 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     editor: { display: "flex", flexDirection: "column", gap: "12px", padding: "14px", borderRadius: tk.rSm, background: tk.well, border: `0.5px solid ${tk.line2}` },
     fieldGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" },
 
-    ruleRow: { display: "flex", alignItems: "center", gap: "12px", padding: "10px 0", borderTop: `0.5px solid ${tk.line1}`, flexWrap: "wrap" },
-    ruleRowFirst: { borderTop: "none", padding: "0 0 10px" },
-    ruleMain: { display: "flex", flexDirection: "column", gap: "2px", flex: "1 1 200px", minWidth: 0 },
-    ruleActions: { display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 },
+    // 规则页三面：列表 / 详情 / 编辑。窄屏时两列自动折成上下两行。
+    ruleLayout: { display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-start" },
+    ruleNav: { flex: "1 1 220px", minWidth: 0, display: "flex", flexDirection: "column", gap: "8px" },
+    rulePane: { flex: "2 1 320px", minWidth: 0 },
+    ruleList: {
+      margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column",
+      border: `0.5px solid ${tk.line2}`, borderRadius: tk.rSm, overflow: "hidden",
+    },
+    ruleItem: {
+      display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "2px", width: "100%",
+      padding: "10px 12px", border: "none", borderTop: `0.5px solid ${tk.line1}`, background: "transparent",
+      color: tk.label, font: tk.font, textAlign: "left", cursor: "pointer",
+    },
+    ruleItemOn: { background: tk.accentSoft },
+    helpBox: {
+      display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "6px",
+      padding: "10px 12px", borderRadius: tk.rSm, background: tk.well,
+    },
 
     empty: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "8px", padding: "16px", borderRadius: tk.rSm, border: `0.5px dashed ${tk.line3}` },
     ol: { margin: 0, paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "4px", color: tk.label2 },
+
+    // 弹窗：正文自己滚动，页脚常驻；::backdrop 与 :modal 见 SCOPED_CSS。
+    dialog: {
+      padding: 0, width: "min(560px, calc(100vw - 32px))", maxHeight: "85vh", border: `0.5px solid ${tk.line2}`,
+      borderRadius: tk.rLg, background: tk.layer1, color: tk.label, font: tk.font,
+    },
+    dialogInner: { display: "flex", flexDirection: "column", maxHeight: "85vh", minHeight: 0 },
+    dialogHead: { display: "flex", alignItems: "flex-start", gap: "12px", padding: "16px 18px 12px", borderBottom: `0.5px solid ${tk.line1}`, flex: "none" },
+    dialogTitle: { margin: 0, font: tk.fontStrong, color: tk.label, flex: "1 1 auto", minWidth: 0, overflowWrap: "anywhere" },
+    dialogBody: { display: "flex", flexDirection: "column", gap: "12px", padding: "16px 18px", overflowY: "auto", minHeight: 0 },
+    dialogFoot: {
+      display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap",
+      padding: "12px 18px", borderTop: `0.5px solid ${tk.line1}`, background: tk.well, flex: "none",
+    },
+    dialogNote: { margin: 0, font: tk.fontSmall, color: tk.label3, flex: "1 1 160px", minWidth: 0 },
+    pair: {
+      display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)", alignItems: "center",
+      gap: "8px", padding: "8px 10px", borderRadius: tk.rSm, background: tk.well, font: tk.fontSmall,
+    },
+    pairCell: { minWidth: 0, overflowWrap: "anywhere", whiteSpace: "pre-wrap", color: tk.label },
+
+    // 词库页：左列表右预览，窄屏折成一列（flex 换行，不靠媒体查询）。
+    wordLayout: { display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-start" },
+    wordMain: { flex: "2 1 340px", minWidth: 0, display: "flex", flexDirection: "column", gap: "12px" },
+    wordAside: { flex: "1 1 260px", minWidth: 0 },
+    wordToolbar: { display: "flex", alignItems: "center", gap: "8px" },
+    wordSearchWrap: { position: "relative", flex: "1 1 auto", minWidth: 0 },
+    wordSearch: { paddingLeft: "28px", paddingRight: "30px" },
+    wordSearchIcon: { position: "absolute", left: "8px", top: "8px", color: tk.label3, font: tk.fontSmall, pointerEvents: "none" },
+    wordSearchClear: { position: "absolute", right: "2px", top: "2px" },
+    wordList: { margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", border: `0.5px solid ${tk.line2}`, borderRadius: tk.rSm, overflow: "hidden" },
+    wordRow: { display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderTop: `0.5px solid ${tk.line1}`, flexWrap: "wrap" },
+    wordRowFirst: { borderTop: "none" },
+    wordCells: { flex: "1 1 240px", minWidth: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)", gap: "8px", alignItems: "center" },
+    wordCell: { minWidth: 0, overflowWrap: "anywhere", whiteSpace: "pre-wrap", font: tk.fontSmall, color: tk.label },
+    wordActions: { display: "flex", alignItems: "center", gap: "2px", flexShrink: 0 },
+    wordStale: { opacity: 0.65 },
+    wordPreviewBox: {
+      margin: 0, padding: "10px 12px", borderRadius: tk.rSm, background: tk.well, border: `0.5px solid ${tk.line2}`,
+      font: tk.fontSmall, color: tk.label, whiteSpace: "pre-wrap", overflowWrap: "anywhere", minHeight: "84px",
+    },
+    wordChips: { display: "flex", flexDirection: "column", gap: "4px" },
+    wordChip: { padding: "4px 8px", borderRadius: tk.rXs, background: tk.accentSoft, color: tk.accent, font: tk.fontSmall, overflowWrap: "anywhere" },
+    wordCounter: { font: tk.fontSmall, color: tk.caption, whiteSpace: "nowrap" },
+    wordEditorFields: { display: "flex", flexDirection: "column", gap: "12px" },
   }
 
   // 只放伪类与动效：内联样式做不到 :hover / :focus-visible / 减弱动态。背景类
@@ -260,6 +319,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   // ui-theme/focus.css 的写法，指针操作时宿主会把 --dsw-focus-ring-color 置成透明。
   const SCOPED_CSS = [
     ".bkl-root :focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }",
+    // 弹窗的遮罩只能走样式表：内联样式写不出 ::backdrop。
+    ".bkl-root .bkl-dialog::backdrop { background: color-mix(in srgb, #000 45%, transparent); }",
     ".bkl-root .bkl-btn, .bkl-root .bkl-tab, .bkl-root .bkl-hover, .bkl-root .bkl-radio, .bkl-root .bkl-switch { transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease; }",
     ".bkl-root .bkl-btn-plain:not([aria-disabled=\"true\"]):hover, .bkl-root .bkl-hover:hover { background-color: var(--dsw-alias-interactive-bg-hover) !important; }",
     ".bkl-root .bkl-btn-fill:not([aria-disabled=\"true\"]):hover { opacity: 0.88; }",
@@ -281,7 +342,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       tabsLabel: "破限设置",
       tabOverview: "概览",
       tabPatches: "补丁",
-      tabContext: "提示词与规则",
+      tabPrompt: "提示词",
+      tabRules: "规则",
+      tabWords: "词库",
       refresh: "刷新",
       refreshedAt: (s) => `更新于${String(s)}`,
       agoJust: "刚刚",
@@ -312,7 +375,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       goPatchesSee: "去补丁页看是哪几处",
       goPatchesPick: "去挑选补丁",
       goPatchesApply: "去补丁页应用",
-      goContext: "调整提示词与规则",
+      goPrompt: "去提示词页",
+      goRules: "去规则页",
+      goWords: "去词库页",
 
       nextStep: "下一步",
       nsRulesCorruptTitle: "规则清单读不出来",
@@ -624,7 +689,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       confirmOverwriteAlias: (from) => `词条「${String(from)}」已存在，确定覆盖吗？`,
       confirmDeleteAlias: (from) => `确定删除词条「${String(from)}」吗？`,
       aliasTitle: "目标词表",
-      aliasDesc: "这里配的词，会在请求发出前把你消息里的真实目标名换成占位名。",
+      aliasDesc: "在请求交给模型前，替换用户消息中的目标词。保存后请新开会话使用。",
       aliasStateEmpty: "词表未配置",
       aliasStateFailed: "词表读取失败",
       aliasStateMiss: "本轮未替换",
@@ -639,6 +704,120 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       aliasFoot: "改动只对之后的新会话生效",
       aliasSaveFailed: "保存失败，改动没有生效",
       aliasClose: "关闭",
+
+      // 五页版新增：词库页、提示词读取失败、规则详情。
+      guideHide: "收起步骤",
+      guideShow: "展开步骤",
+      rowWords: "目标词库",
+      wordsSummaryCount: (n) => `${String(n)} 条已保存`,
+      wordsSummaryEmpty: "还没有词条",
+      wordsSummaryFailed: "读取失败，写入已暂停",
+      wordsSummaryHint: "在请求交给模型前，替换用户消息中的目标词。保存后请新开会话使用。",
+      manageWords: "管理",
+      doneAlreadyNext: "这次没有写入文件。是否已经重启过，本页无法判断。",
+      promptReadFailedTitle: "共用正文读取失败",
+      promptReadFailedNext: "正文内容未知，不能当作空正文或内置正文。为避免覆盖，编辑与保存已暂停；重新读取成功后才能继续。",
+      promptReadRetry: "重新读取正文",
+      promptUnknownPlaceholder: "（读取失败，内容未知）",
+      promptCountUnknown: "内容未知",
+      whyPromptUnread: "正文还没读取成功，不能编辑或保存。",
+      promptSavingHint: "正在保存已提交的内容，你可以继续编辑；新输入会保留。",
+      donePromptSavedMore: "已保存提交的内容；编辑器里还有新的未保存修改",
+      donePromptSavedMoreNext: "保存期间输入的内容仍在编辑器里，可以继续编辑或再次保存。",
+      confirmDiscardPromptTitle: "放弃正文修改？",
+      confirmDiscardPromptBody: "会回到上次保存的内容，当前未保存的输入会丢失。",
+      confirmDiscardPromptYes: "放弃修改",
+      ruleDetailsTitle: "规则详情",
+      ruleDetailActive: (t) => `正文已写入 ${String(t)}；保存编辑会同步过去。`,
+      ruleDetailInactive: (t) => `保存后不会自动生效；激活才会写入 ${String(t)}。`,
+      ruleBodyLoading: "正在读取正文…",
+      ruleBodyFailed: "正文读不出来",
+      ruleBodyFailedNext: "规则仍在列表里。可以重试读取，或直接编辑它。",
+      ruleBodyRetry: "重试读取",
+      ruleSelect: (label) => `查看规则 ${String(label)}`,
+      activateNow: "现在激活",
+      wordsTitle: "词库",
+      wordsLead: "在请求交给模型前，替换用户消息中的目标词。保存后请新开会话使用。",
+      wordsScope: "只处理用户消息里的文字。聊天界面原文、系统提示词和工具结果都不会被修改；本地预览也不代表真实会话已经发生替换。",
+      wordsReadFailedTitle: "词库读取失败，写入与预览已暂停",
+      wordsReadFailedStale: (n) => `下方保留上次读取的 ${String(n)} 条数据，并标记为旧数据。重新读取成功后才能继续。`,
+      wordsReadFailedUnknown: "下方内容未知，不能当作空词库。重新读取成功后才能继续。",
+      wordsRetryRead: "重新读取词库",
+      wordsReadOk: "词库已重新读取",
+      wordsCount: (n, max) => `${String(n)} / ${String(max)} 条`,
+      wordsStaleTag: "旧数据",
+      wordsAdd: "添加词条",
+      wordsLimitNote: (max) => `已达到 ${String(max)} 条上限。仍可编辑、删除已有词条，或用相同原词覆盖保存。`,
+      wordsSearchLabel: "搜索原词或替换词",
+      wordsSearchClear: "清除搜索",
+      wordsNoMatchTitle: "没有找到匹配的词条",
+      wordsNoMatchBody: "试试原词或替换词里的其他字。搜索只影响列表，不改变替换范围。",
+      wordsEmptyTitle: "还没有词条",
+      wordsEmptyBody: "把想替换的目标词配一个新名称。保存后请新开会话使用。",
+      wordsEmptyAdd: "添加第一条词条",
+      wordsEditLabel: (from) => `编辑词条 ${String(from)}`,
+      wordsDeleteLabel: (from) => `删除词条 ${String(from)}`,
+      wordsEachSave: "每次操作单独保存。搜索只影响列表，不改变替换范围与处理顺序。",
+      wordsPreviewTitle: "试一试替换效果",
+      wordsPreviewDesc: "使用已保存的词库，文字只在本页处理。",
+      wordsPreviewInput: "示例文本",
+      wordsPreviewPlaceholder: "输入包含原词的一句话…",
+      wordsPreviewOutput: "替换后",
+      wordsPreviewLocal: "本地预览",
+      wordsPreviewPaused: "预览已暂停：读取成功后才能试。",
+      wordsPreviewEmptyList: "词库为空，添加并保存后可以试用。",
+      wordsPreviewInputHint: "输入一段示例文字。",
+      wordsPreviewHit: (n) => `命中 ${String(n)} 个词条，仅为本地预览。`,
+      wordsPreviewMiss: "没有词条匹配这段文本。",
+      wordsPreviewRulesTitle: "替换规则与生效范围",
+      wordsPreviewRules1: "区分大小写，精确字面匹配，长原词优先。按顺序处理时，替换结果可能继续匹配后面的词条。",
+      wordsPreviewRules2: "本地预览不保存词条，也不产生真实会话命中记录。保存后请新开会话使用。",
+      wordEditorAddTitle: "添加词条",
+      wordEditorEditTitle: "编辑词条",
+      wordEditorHint: "首尾空白会去掉。原词和替换词各最多 64 个字符。",
+      wordFromLabel: "原词（必填）",
+      wordToLabel: "替换为（必填）",
+      wordFromPlaceholder: "例如：示例旧称",
+      wordToPlaceholder: "例如：示例新称",
+      wordErrFromEmpty: "请填写原词。",
+      wordErrToEmpty: "请填写替换词。",
+      wordErrSame: "原词与替换词不能相同。",
+      wordErrFromLong: (n) => `原词最多 64 个字符，现在 ${String(n)} 个。`,
+      wordErrToLong: (n) => `替换词最多 64 个字符，现在 ${String(n)} 个。`,
+      wordErrLimit: (max) => `词库已达到 ${String(max)} 条上限，请先编辑或删除已有词条，或用相同原词覆盖。`,
+      wordCap: (n) => `${String(n)} / 64`,
+      wordSave: "保存词条",
+      wordNoChange: "没有改动，不用保存。",
+      wordSaveNote: "首尾空白会去掉，保存成功后才更新词库。",
+      wordSavingNote: "正在保存，请稍候。",
+      wordSaveFailedTitle: "保存失败，草稿已保留",
+      wordSaveFailedNext: "已保存的词库没有改变。确认后可以再试一次。",
+      wordSaveUnknownTitle: "保存没有回执，结果未知",
+      wordSaveUnknownNext: "网络中断或超时不代表后端没有写入。草稿已保留；先重新读取核对，再决定要不要重试。",
+      wordSaved: "词条已保存",
+      wordSavedMerged: "词条已合并并保存",
+      wordSavedNext: "保存后请新开会话使用。",
+      wordDeleteTitle: (from) => `删除词条「${String(from)}」？`,
+      wordDeleteBody: "删除会立即保存新的词库。取消会保留原词条。",
+      wordDeleteYes: "删除词条",
+      wordDeleted: "词条已删除",
+      wordOverwriteTitle: (from) => `覆盖词条「${String(from)}」？`,
+      wordOverwriteBody: "同一个原词已有记录，确认后使用新的替换词。",
+      wordOverwriteYes: "确认覆盖",
+      wordMergeTitle: "合并并覆盖同名词条？",
+      wordMergeBody: "修改后的原词与另一条已有记录相同，确认后两条合并为一条。",
+      wordMergeYes: "确认合并覆盖",
+      wordMergeCurrent: "正在编辑的原记录",
+      wordMergeDuplicate: "将被覆盖的已有记录",
+      wordMergeFinal: "最终保留一条",
+      wordBackEdit: "返回编辑",
+      wordDiscardTitle: "放弃词条草稿？",
+      wordDiscardBody: "未保存的原词与替换词会丢失，已保存的词库保持不变。",
+      wordDiscardYes: "放弃草稿",
+      wordKeepEdit: "继续编辑",
+      wordsManage: "管理词库",
+      wordsFromChatReturn: "返回会话",
+      wordsNavHint: "请在设置里打开「破限」，会直接停在词库页。",
     },
     en: {
       nav: "Breaklimit",
@@ -647,7 +826,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       tabsLabel: "Breaklimit settings",
       tabOverview: "Overview",
       tabPatches: "Patches",
-      tabContext: "Prompt & rules",
+      tabPrompt: "Prompt",
+      tabRules: "Rules",
+      tabWords: "Word list",
       refresh: "Refresh",
       refreshedAt: (s) => `Updated ${String(s)}`,
       agoJust: "just now",
@@ -678,7 +859,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       goPatchesSee: "See them on Patches",
       goPatchesPick: "Choose patches",
       goPatchesApply: "Apply on Patches",
-      goContext: "Adjust prompt & rules",
+      goPrompt: "Open Prompt",
+      goRules: "Open Rules",
+      goWords: "Open word list",
 
       nextStep: "Next step",
       nsRulesCorruptTitle: "Rules index cannot be read",
@@ -990,7 +1173,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       confirmOverwriteAlias: (from) => `Entry "${String(from)}" already exists. Overwrite?`,
       confirmDeleteAlias: (from) => `Delete entry "${String(from)}"?`,
       aliasTitle: "Target words",
-      aliasDesc: "Words listed here replace the real target name in your message before it reaches the model.",
+      aliasDesc: "Replaces target words in your messages before a request reaches the model. Open a new session after saving.",
       aliasStateEmpty: "Word list empty",
       aliasStateFailed: "Word list unavailable",
       aliasStateMiss: "No swaps this turn",
@@ -1005,6 +1188,121 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       aliasFoot: "Changes apply to new sessions only",
       aliasSaveFailed: "Save failed; nothing changed",
       aliasClose: "Close",
+
+      // Five-tab additions: collapsible first-run steps, word list page,
+      // prompt read failure, rule details.
+      guideHide: "Hide the steps",
+      guideShow: "Show the steps",
+      rowWords: "Target word list",
+      wordsSummaryCount: (n) => `${String(n)} saved`,
+      wordsSummaryEmpty: "No entries yet",
+      wordsSummaryFailed: "Read failed; writes paused",
+      wordsSummaryHint: "Replaces target words in your messages before a request reaches the model. Open a new session after saving.",
+      manageWords: "Manage",
+      doneAlreadyNext: "No file was written. This page cannot tell whether the host has been restarted.",
+      promptReadFailedTitle: "Could not read the shared prompt",
+      promptReadFailedNext: "The current text is unknown; treat it as neither empty nor the builtin. Editing and saving are paused so nothing gets overwritten. Retry the read to continue.",
+      promptReadRetry: "Read the prompt again",
+      promptUnknownPlaceholder: "(read failed, content unknown)",
+      promptCountUnknown: "Content unknown",
+      whyPromptUnread: "The prompt has not been read yet, so editing and saving are paused.",
+      promptSavingHint: "Saving the submitted text; you can keep typing. New input is kept.",
+      donePromptSavedMore: "Saved the submitted text; newer edits are still unsaved",
+      donePromptSavedMoreNext: "Text typed during the save stayed in the editor. Keep editing or save again.",
+      confirmDiscardPromptTitle: "Discard prompt changes?",
+      confirmDiscardPromptBody: "The editor returns to the last saved text; unsaved input is lost.",
+      confirmDiscardPromptYes: "Discard changes",
+      ruleDetailsTitle: "Rule details",
+      ruleDetailActive: (t) => `The body is written into ${String(t)}; saving edits syncs it.`,
+      ruleDetailInactive: (t) => `Saving does not activate it; activation writes ${String(t)}.`,
+      ruleBodyLoading: "Reading the rule body...",
+      ruleBodyFailed: "Could not read the rule body",
+      ruleBodyFailedNext: "The rule is still listed. Retry the read, or edit it directly.",
+      ruleBodyRetry: "Retry the read",
+      ruleSelect: (label) => `View rule ${String(label)}`,
+      activateNow: "Activate now",
+      wordsTitle: "Word list",
+      wordsLead: "Replaces target words in your messages before a request reaches the model. Open a new session after saving.",
+      wordsScope: "Only text in your messages is handled. Chat text on screen, system prompts, and tool results are untouched. The local preview is not a record of real session replacements.",
+      wordsReadFailedTitle: "Word list read failed; writes and preview are paused",
+      wordsReadFailedStale: (n) => `The ${String(n)} entries read earlier are kept below and marked as stale. Retry the read to continue.`,
+      wordsReadFailedUnknown: "The content below is unknown; it is not an empty list. Retry the read to continue.",
+      wordsRetryRead: "Read the word list again",
+      wordsReadOk: "Word list reloaded",
+      wordsCount: (n, max) => `${String(n)} / ${String(max)}`,
+      wordsStaleTag: "stale",
+      wordsAdd: "Add entry",
+      wordsLimitNote: (max) => `The ${String(max)}-entry limit is reached. You can still edit or delete entries, or overwrite one with the same original word.`,
+      wordsSearchLabel: "Search original or replacement",
+      wordsSearchClear: "Clear search",
+      wordsNoMatchTitle: "No entry matches",
+      wordsNoMatchBody: "Try other characters from the original or replacement. Search only filters the list; it never changes the replacement scope.",
+      wordsEmptyTitle: "No entries yet",
+      wordsEmptyBody: "Give a target word a new name. Open a new session after saving.",
+      wordsEmptyAdd: "Add the first entry",
+      wordsEditLabel: (from) => `Edit entry ${String(from)}`,
+      wordsDeleteLabel: (from) => `Delete entry ${String(from)}`,
+      wordsEachSave: "Each change is saved on its own. Search only filters the list, not the replacement scope or order.",
+      wordsPreviewTitle: "Try the replacement",
+      wordsPreviewDesc: "Uses the saved list; the text stays on this page.",
+      wordsPreviewInput: "Sample text",
+      wordsPreviewPlaceholder: "Type a sentence containing an original word...",
+      wordsPreviewOutput: "After replacement",
+      wordsPreviewLocal: "local preview",
+      wordsPreviewPaused: "Preview paused until the read succeeds.",
+      wordsPreviewEmptyList: "The list is empty; add and save entries to try.",
+      wordsPreviewInputHint: "Type some sample text.",
+      wordsPreviewHit: (n) => `${String(n)} entries matched. Local preview only.`,
+      wordsPreviewMiss: "No entry matches this text.",
+      wordsPreviewRulesTitle: "Replacement rules and scope",
+      wordsPreviewRules1: "Case-sensitive exact matches, longer originals first. Later entries can still match text produced by earlier replacements.",
+      wordsPreviewRules2: "The preview saves nothing and records no real session hits. Open a new session after saving.",
+      wordEditorAddTitle: "Add entry",
+      wordEditorEditTitle: "Edit entry",
+      wordEditorHint: "Leading and trailing spaces are trimmed. Each side is at most 64 characters.",
+      wordFromLabel: "Original (required)",
+      wordToLabel: "Replace with (required)",
+      wordFromPlaceholder: "e.g. old name",
+      wordToPlaceholder: "e.g. new name",
+      wordErrFromEmpty: "Enter the original word.",
+      wordErrToEmpty: "Enter the replacement.",
+      wordErrSame: "The original and the replacement must differ.",
+      wordErrFromLong: (n) => `Original is at most 64 characters; this is ${String(n)}.`,
+      wordErrToLong: (n) => `Replacement is at most 64 characters; this is ${String(n)}.`,
+      wordErrLimit: (max) => `The ${String(max)}-entry limit is reached. Edit or delete an entry first, or overwrite one with the same original word.`,
+      wordCap: (n) => `${String(n)} / 64`,
+      wordSave: "Save entry",
+      wordNoChange: "Nothing changed; no save needed.",
+      wordSaveNote: "Spaces are trimmed; the list updates only after a successful save.",
+      wordSavingNote: "Saving; please wait.",
+      wordSaveFailedTitle: "Save failed; the draft is kept",
+      wordSaveFailedNext: "The saved list is unchanged. Try again when ready.",
+      wordSaveUnknownTitle: "No save confirmation; the result is unknown",
+      wordSaveUnknownNext: "A network error or timeout does not mean the backend stayed unchanged. The draft is kept; re-read to reconcile before retrying.",
+      wordSaved: "Entry saved",
+      wordSavedMerged: "Entries merged and saved",
+      wordSavedNext: "Open a new session to use it.",
+      wordDeleteTitle: (from) => `Delete entry "${String(from)}"?`,
+      wordDeleteBody: "Deleting saves the new list right away. Cancel keeps the entry.",
+      wordDeleteYes: "Delete entry",
+      wordDeleted: "Entry deleted",
+      wordOverwriteTitle: (from) => `Overwrite entry "${String(from)}"?`,
+      wordOverwriteBody: "This original word already exists; confirming keeps the new replacement.",
+      wordOverwriteYes: "Overwrite",
+      wordMergeTitle: "Merge with the entry using this word?",
+      wordMergeBody: "The edited original word matches another entry; confirming merges both into one.",
+      wordMergeYes: "Merge and overwrite",
+      wordMergeCurrent: "The record being edited",
+      wordMergeDuplicate: "The record it overwrites",
+      wordMergeFinal: "The record kept",
+      wordBackEdit: "Back to editing",
+      wordDiscardTitle: "Discard the entry draft?",
+      wordDiscardBody: "Unsaved input is lost; the saved list stays unchanged.",
+      wordDiscardYes: "Discard draft",
+      wordKeepEdit: "Keep editing",
+      wordsManage: "Manage word list",
+      wordsFromChatReturn: "Back to the conversation",
+      wordsNavHint: "Open Breaklimit in Settings; it lands on the word list page.",
     },
   }
 
@@ -1194,6 +1492,298 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     }
   }
 
+  // ---- 词库：纯逻辑与两个挂载点共用的状态 -----------------------------------
+  //
+  // 词表只有一个事实来源（$DSH_HOME/breaklimit/masks.json），PUT 是整表覆盖。
+  // 设置页与浮窗各自持有一份 React state，若各拿自己的旧列表去 PUT，后到的那次
+  // 会把先写入的条目抹掉。所以写入收敛到一个模块级 store：按操作（增/改/删）
+  // 提交，执行时基于最新列表算出整表再写；写入串行，过期响应作废。
+
+  /** 一条映射是否可用。空白、超长、自映射都算不可用。与 host/masks.js 的 validEntry 同口径。 */
+  function aliasEntryValid(entry) {
+    if (entry === null || typeof entry !== "object") return false
+    const { from, to } = entry
+    if (typeof from !== "string" || typeof to !== "string") return false
+    const source = from.trim()
+    const target = to.trim()
+    if (source === "" || target === "") return false
+    if (source.length > WORD_TERM_MAX || target.length > WORD_TERM_MAX) return false
+    if (source === target) return false
+    return true
+  }
+
+  /** 去空白、丢无效项、按 from 去重（后者覆盖前者）。与 host/masks.js 的 normalizeEntries 同口径。 */
+  function normalizeAliasEntries(entries) {
+    const out = []
+    const seen = new Map()
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      if (!aliasEntryValid(entry)) continue
+      const item = { from: entry.from.trim(), to: entry.to.trim() }
+      const at = seen.get(item.from)
+      if (at === undefined) {
+        seen.set(item.from, out.length)
+        out.push(item)
+      } else {
+        out[at] = item
+      }
+    }
+    return out.slice(0, WORDS_MAX)
+  }
+
+  /**
+   * 本地预览：与 host/masks.js 的 maskText 同一套语义——区分大小写、精确字面匹配、
+   * 长词优先、按顺序依次替换，后面的词条可能继续匹配前面替换产生的文本。
+   * 不是「模拟真实命中」，只是给用户看保存后的替换效果。
+   */
+  function maskPreview(text, entries) {
+    if (typeof text !== "string" || text === "") return { text, hits: 0, matched: [] }
+    const list = normalizeAliasEntries(entries)
+    if (list.length === 0) return { text, hits: 0, matched: [] }
+    const ordered = [...list].sort((a, b) => b.from.length - a.from.length)
+    let out = text
+    let hits = 0
+    const matched = []
+    for (const entry of ordered) {
+      if (!out.includes(entry.from)) continue
+      const before = out
+      out = out.split(entry.from).join(entry.to)
+      if (out === before) continue
+      hits += 1
+      matched.push(entry.from)
+    }
+    return { text: out, hits, matched }
+  }
+
+  /**
+   * 一次词条操作落到当前列表后的整表。change 形如
+   * `{ type: "save", originalFrom, entry }` 或 `{ type: "delete", from }`。
+   * 编辑时把原词改成另一个已有词条的原词，是合并：删掉原来那条，目标那条换成新值。
+   */
+  function aliasNextEntries(entries, change) {
+    const list = Array.isArray(entries) ? entries : []
+    if (change?.type === "delete") return list.filter((item) => item.from !== change.from)
+    const entry = { from: String(change?.entry?.from ?? ""), to: String(change?.entry?.to ?? "") }
+    const originalFrom = change?.originalFrom ?? null
+    const original = originalFrom === null ? -1 : list.findIndex((item) => item.from === originalFrom)
+    const duplicate = list.findIndex((item) => item.from === entry.from)
+    if (duplicate >= 0 && duplicate !== original) {
+      return list.filter((_, index) => index !== original).map((item) => (item.from === entry.from ? entry : item))
+    }
+    if (original >= 0) return list.map((item, index) => (index === original ? entry : item))
+    return list.concat([entry])
+  }
+
+  /** 这次写入会不会碰到已有的同名词条："overwrite"（新增撞原词）或 "merge"（改名撞原词），无冲突为 null。 */
+  function aliasChangeKind(entries, change) {
+    if (change?.type !== "save") return null
+    const list = Array.isArray(entries) ? entries : []
+    const from = String(change?.entry?.from ?? "")
+    const originalFrom = change?.originalFrom ?? null
+    const duplicate = list.find((item) => item.from === from)
+    if (duplicate === undefined) return null
+    return originalFrom === null ? "overwrite" : originalFrom === from ? null : "merge"
+  }
+
+  /** 词条输入校验：先去首尾空白再判空、同词、超长、超条数。返回逐项错误文案。 */
+  function wordEntryErrors(from, to, options = {}) {
+    const source = String(from ?? "").trim()
+    const target = String(to ?? "").trim()
+    const originalFrom = options.originalFrom ?? null
+    const entries = Array.isArray(options.entries) ? options.entries : []
+    const maxEntries = options.maxEntries ?? WORDS_MAX
+    const maxTerm = options.maxTerm ?? WORD_TERM_MAX
+    const errors = { from: "", to: "", limit: "" }
+    if (source === "") errors.from = T.wordErrFromEmpty
+    else if (source.length > maxTerm) errors.from = T.wordErrFromLong(source.length)
+    if (target === "") errors.to = T.wordErrToEmpty
+    else if (target.length > maxTerm) errors.to = T.wordErrToLong(target.length)
+    else if (source === target) errors.to = T.wordErrSame
+    if (originalFrom === null && entries.length >= maxEntries && !entries.some((item) => item.from === source)) {
+      errors.limit = T.wordErrLimit(maxEntries)
+    }
+    return errors
+  }
+
+  /** 保存成功后只清掉提交过的那一份；保存期间继续输入的内容必须留下。 */
+  function draftAfterSave(draft, submitted) {
+    return draft === submitted ? null : draft
+  }
+
+  /**
+   * 规则保存结果的反馈。保存与激活是两步：这里只在合适时提出「现在激活」的邀请，
+   * 任何分支都不会直接激活。返回 activateRule 为可激活的规则 id，无则为 null。
+   */
+  function ruleSaveNotice(data, activeRuleId, edit) {
+    const target = String(data?.target ?? edit.target)
+    let notice = { tone: "ok", title: T.ruleSaved, next: undefined, activateRule: null }
+    if (data?.landingMoved) notice = { ...notice, title: T.ruleSavedMoved(target) }
+    else if (data?.landingSynced) notice = { ...notice, title: T.ruleSavedSynced(target) }
+    else if (data?.landingStale) notice = { ...notice, tone: "warn", title: T.ruleSavedStale(target) }
+    else if (activeRuleId !== edit.id) notice = { ...notice, title: T.ruleSavedInactive, next: T.ruleSavedInactiveNext }
+    if (activeRuleId !== edit.id && !data?.landingStale && !data?.landingMoved && !data?.landingSynced) {
+      notice.activateRule = edit.id
+    }
+    return notice
+  }
+
+  /** 词库共享状态。requests 注入 get/put，测试可以直接喂假接口。 */
+  function createAliasStore(requests) {
+    const listeners = new Set()
+    const state = {
+      phase: "loading",       // loading | ready | failed
+      entries: [],
+      stale: false,           // 读取失败后保留的旧数据；为 true 时禁止写入与预览
+      limits: { maxEntries: WORDS_MAX, maxTerm: WORD_TERM_MAX },
+      lastHits: 0,
+      saving: false,
+    }
+    // 数据版本号：每次落定 entries 都 +1。读取响应带着开始时的版本回来，
+    // 版本对不上说明中间有过写入或更晚的读取，旧响应直接丢弃。
+    let version = 0
+    let chain = Promise.resolve()
+    const emit = () => { for (const listener of [...listeners]) listener() }
+    const read = () => {
+      const seen = version
+      return requests.get("/alias").then((payload) => {
+        if (seen !== version || state.saving) return
+        const data = payload?.data ?? {}
+        // 读取告警可能随 HTTP 200、code=ok 一起回来（message 非空）。此时 entries
+        // 不可信：不能把空表当成真的空词库，保留旧数据并标记，同时暂停写入与预览。
+        const warned = typeof payload?.message === "string" && payload.message !== ""
+        if (warned) {
+          state.stale = true
+          state.phase = "failed"
+          emit()
+          return
+        }
+        state.entries = Array.isArray(data.entries) ? data.entries : []
+        state.limits = {
+          maxEntries: Number.isFinite(data.limits?.maxEntries) ? data.limits.maxEntries : WORDS_MAX,
+          maxTerm: Number.isFinite(data.limits?.maxTerm) ? data.limits.maxTerm : WORD_TERM_MAX,
+        }
+        state.lastHits = Number(data.lastHits) || 0
+        state.phase = "ready"
+        state.stale = false
+        version += 1
+        emit()
+      }).catch(() => {
+        if (seen !== version) return
+        // 读不到不等于空词库：旧数据留着、标旧，写入与预览暂停。
+        if (state.entries.length > 0) state.stale = true
+        state.phase = "failed"
+        emit()
+      })
+    }
+    // 写入串行：PUT 是整表覆盖，串行 + 执行时基于最新列表计算，两处挂载点才不会互相覆盖。
+    const commit = (change) => {
+      const task = async () => {
+        // 读取失败或数据已标旧时禁止写入：看不清现状就整表覆盖，风险太大。
+        if (state.phase === "failed" || state.stale) return { ok: false, unknown: false, refused: true }
+        const next = aliasNextEntries(state.entries, change)
+        state.saving = true
+        emit()
+        try {
+          const payload = await requests.put("/alias", { entries: next })
+          const data = payload?.data ?? {}
+          state.entries = Array.isArray(data.entries) ? data.entries : next
+          state.phase = "ready"
+          state.stale = false
+          state.saving = false
+          version += 1
+          emit()
+          return { ok: true }
+        } catch (error) {
+          state.saving = false
+          emit()
+          const code = String(error?.code ?? "")
+          // 超时/断网不等于后端没写：结果未知，让调用方去重新读取核对，而不是宣布未生效。
+          return { ok: false, unknown: code === "timeout" || code === "network" }
+        }
+      }
+      const result = chain.then(task, task)
+      chain = result.then(() => undefined, () => undefined)
+      return result
+    }
+    return {
+      state,
+      read,
+      commit,
+      subscribe(listener) {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+    }
+  }
+
+  const aliasStore = createAliasStore({ get, put })
+
+  // 浮窗的「管理词库」要把设置分区切到词库页。设置分区只在设置面板里挂载，
+  // 事件未必有人接；接不到时把待落地页签留在模块级，分区一挂载就用上。
+  let pendingTabRequest = null
+  let wordsFromChat = false
+  /** apply(ctx) 收下的宿主上下文，供浮窗打开设置分区用。 */
+  let hostCtx = null
+
+  /** 词库或档位写完后通知另一个挂载点重拉状态。 */
+  function notifyStateChanged() {
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+      window.dispatchEvent(new CustomEvent(STATE_CHANGED_EVENT))
+    }
+  }
+
+  /**
+   * 浮窗的「管理词库」：目标是设置分区的词库页。分区已挂载就直接切页；没挂载时
+   * 把待落地页签留在模块级（分区一挂载就用上），再让宿主打开设置分区；都不行就
+   * 返回 false，由浮窗给一句指引，不假装已经跳过去。
+   */
+  function openWordsFromDock() {
+    pendingTabRequest = "words"
+    wordsFromChat = true
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+      const detail = { tab: "words", handled: false }
+      window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail }))
+      if (detail.handled === true) return true
+    }
+    return openHostSettingsSection(hostCtx, SECTION_ID)
+  }
+
+  /** 让宿主的设置面板直接打开本插件分区。拿不到能力时返回 false，由调用方给提示。 */
+  function openHostSettingsSection(ctx, id) {
+    try {
+      const entries = typeof ctx?.slots?.entries === "function" ? ctx.slots.entries("sidebar.settings") : []
+      const decl = entries?.[0]?.store
+      const instance = decl !== null && typeof decl?.create === "function" ? decl.create() : null
+      const actions = instance?.actions
+      if (typeof actions?.openSection === "function") {
+        actions.openSection(id)
+        return true
+      }
+      if (typeof actions?.open === "function") {
+        actions.open()
+        return true
+      }
+    } catch {
+      // 宿主版本换了壳就退回提示文案，不影响词库本身的功能。
+    }
+    return false
+  }
+
+  /**
+   * 五个页签在窄屏下横排滚动；选中项要一直留在可视区里。切页后和窗口尺寸变化后
+   * 各调一次，只动页签条自己的 scrollLeft，不把整页滚走。
+   */
+  function revealSelectedTab(tab) {
+    if (typeof document === "undefined") return
+    const list = document.getElementById("bkl-tablist")
+    const node = document.getElementById(`bkl-tab-${String(tab)}`)
+    if (list === null || node === null) return
+    if (typeof list.getBoundingClientRect !== "function" || typeof node.getBoundingClientRect !== "function") return
+    const box = node.getBoundingClientRect()
+    const area = list.getBoundingClientRect()
+    if (box.right > area.right) list.scrollLeft += box.right - area.right
+    else if (box.left < area.left) list.scrollLeft -= area.left - box.left
+  }
+
   // ---- 从后端状态推导结论 ---------------------------------------------------
   //
   // 这里只做归纳，不做判断：是否待写入、是否阻断，全部来自后端预检的 findings。
@@ -1265,7 +1855,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     if (f.pendingFiles > 0) {
       return { tone: "accent", title: T.nsPendingTitle(f.pendingFiles), body: T.nsPendingBody, primary: { label: T.goPatchesApply, action: "goPatches" } }
     }
-    return { tone: "ok", title: T.nsDoneTitle, body: T.nsDoneBody, secondary: { label: T.goContext, action: "goContext" } }
+    return { tone: "ok", title: T.nsDoneTitle, body: T.nsDoneBody, secondary: { label: T.goPrompt, action: "goPrompt" } }
   }
 
   function stepItems(f) {
@@ -1286,7 +1876,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       applyValue = T.stepInPlace
     }
     return [
-      { key: "mode", tab: "context", state: "done", title: T.step1Title, value: modeLabel(f.mode), desc: T.step1Desc },
+      { key: "mode", tab: "prompt", state: "done", title: T.step1Title, value: modeLabel(f.mode), desc: T.step1Desc },
       {
         key: "pick", tab: "patches", state: f.enabledCount > 0 ? "done" : "todo", title: T.step2Title,
         value: f.total === 0 ? T.unknown : T.pickedOf(f.enabledCount, f.total), desc: T.step2Desc,
@@ -1328,8 +1918,14 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
   function actionLabel(action) {
     if (action === "retry") return T.retry
+    if (action === "retryPrompt") return T.promptReadRetry
+    if (action === "retryAlias") return T.wordsRetryRead
     if (action === "goOverview") return T.goOverview
     if (action === "goPatches") return T.goPatches
+    if (action === "goPrompt") return T.goPrompt
+    if (action === "goRules") return T.goRules
+    if (action === "goWords") return T.goWords
+    if (action === "activateNow") return T.activateNow
     if (action === "recoverRules") return T.recoverRules
     return T.recheck
   }
@@ -1340,12 +1936,14 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
    * 不可点的按钮用 aria-disabled 而不是 disabled：保留键盘焦点，读屏能通过
    * aria-describedby 读到「为什么不能点」。
    */
-  function Button({ kind = "plain", size, off, reason, describedBy, label, expanded, controls, buttonRef, onClick, children }) {
+  function Button({ kind = "plain", size, off, reason, describedBy, label, expanded, controls, buttonRef, autofocus, onClick, children }) {
     const filled = kind === "primary" || kind === "danger"
     return h("button", {
       type: "button",
       ref: buttonRef,
       className: `bkl-btn ${filled ? "bkl-btn-fill" : "bkl-btn-plain"}`,
+      // 弹窗里指定初始焦点用；Dialog 打开时优先找这个标记。
+      "data-bkl-autofocus": autofocus === true ? "true" : undefined,
       style: merge(
         S.btn,
         kind === "primary" && S.btnPrimary,
@@ -1440,30 +2038,65 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         : null)
   }
 
-  /** 就地确认条：打开时焦点落在确认按钮上，Esc 取消。 */
-  function ConfirmStrip({ confirm, busy, onAccept, onCancel }) {
-    const yesRef = useRef(null)
-    useEffect(() => { yesRef.current?.focus?.() }, [])
-    const danger = confirm.tone === "danger"
-    return h("div", {
-      className: "bkl-fade",
-      role: "group",
-      "aria-labelledby": "bkl-confirm-title",
-      style: merge(S.confirm, danger && { border: `0.5px solid ${tk.error}` }),
-      onKeyDown: (event) => {
-        if (event.key !== "Escape") return
-        event.preventDefault()
-        onCancel()
-      },
+  // 弹窗：原生 <dialog> + showModal。Esc（cancel）走 onClose；打开后焦点先落到首个
+  // 可聚焦控件，关闭后回到触发它的元素；正文区自己滚动，页脚常驻可达。
+  // 不可点的按钮继续用 aria-disabled，行为与页面其他按钮一致。
+  const FOCUSABLE = "button, [href], input, select, textarea, [tabindex]:not([tabindex=\"-1\"])"
+
+  function Dialog({ open, title, tone, body, foot, onClose }) {
+    const nodeRef = useRef(null)
+    const triggerRef = useRef(null)
+    useEffect(() => {
+      const element = nodeRef.current
+      if (element === null || typeof element.showModal !== "function") return undefined
+      if (open) {
+        triggerRef.current = typeof document !== "undefined" && document.activeElement ? document.activeElement : null
+        if (!element.open) element.showModal()
+        const target = (typeof element.querySelector === "function" ? element.querySelector("[data-bkl-autofocus]") : null)
+          ?? (typeof element.querySelector === "function" ? element.querySelector(FOCUSABLE) : null)
+        target?.focus?.()
+      } else if (element.open) {
+        element.close()
+        const back = triggerRef.current
+        if (back !== null && typeof back.focus === "function" && back.isConnected !== false) back.focus()
+      }
+      return undefined
+    }, [open])
+    useEffect(() => {
+      const element = nodeRef.current
+      if (element === null || typeof element.addEventListener !== "function") return undefined
+      const onCancel = (event) => { event.preventDefault(); onClose() }
+      const onClick = (event) => { if (event.target === element) onClose() }
+      element.addEventListener("cancel", onCancel)
+      element.addEventListener("click", onClick)
+      return () => {
+        element.removeEventListener("cancel", onCancel)
+        element.removeEventListener("click", onClick)
+      }
+    }, [onClose])
+    return h("dialog", {
+      ref: nodeRef,
+      className: "bkl-dialog",
+      "aria-modal": "true",
+      "aria-labelledby": "bkl-dialog-title",
+      "aria-describedby": "bkl-dialog-body",
+      style: S.dialog,
     },
-      h("p", { id: "bkl-confirm-title", style: merge(S.confirmTitle, danger && { color: tk.error }) }, confirm.title),
-      h("p", { id: "bkl-confirm-body", style: S.text }, confirm.body),
-      Array.isArray(confirm.items) && confirm.items.length > 0 ? h(PathList, { items: confirm.items }) : null,
-      confirm.foot ? h("p", { style: S.small }, confirm.foot) : null,
-      h("div", { style: S.row },
-        h(Button, { kind: danger ? "danger" : "primary", off: busy, reason: T.whyBusy, describedBy: "bkl-confirm-body", buttonRef: yesRef, onClick: onAccept },
-          busy ? T.working : confirm.yes),
-        h(Button, { kind: "quiet", onClick: onCancel }, T.cancel)))
+      h("div", { style: S.dialogInner },
+        h("div", { style: S.dialogHead },
+          h(Dot, { tone: tone ?? "accent" }),
+          h("h3", { id: "bkl-dialog-title", style: S.dialogTitle }, title),
+          h(Button, { kind: "quiet", size: "small", label: T.dismissShort, onClick: onClose }, T.dismissShort)),
+        h("div", { id: "bkl-dialog-body", style: S.dialogBody }, body),
+        h("div", { style: S.dialogFoot }, foot)))
+  }
+
+  /** 词条原词 → 替换词 的成对展示；纯文本渲染，不把用户输入当 HTML。 */
+  function Pair({ entry }) {
+    return h("div", { style: S.pair },
+      h("span", { style: S.pairCell }, entry.from),
+      h("span", { "aria-hidden": "true", style: { color: tk.label3 } }, "\u2192"),
+      h("span", { style: S.pairCell }, entry.to))
   }
 
   function Rows({ items }) {
@@ -1597,7 +2230,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       }))
   }
 
-  function OverviewPage({ f, status, override, step, busy, enabledPending, restart, onRun, onGo, onToggleEnabled, nextNotice, overviewNotice, restartView, confirmView }) {
+  function OverviewPage({ f, status, override, step, busy, enabledPending, restart, onRun, onGo, onToggleEnabled, nextNotice, overviewNotice, restartView, words, guideOpen, onToggleGuide }) {
     const target = status?.target ?? {}
     const rootHint = status?.hostRoot ? `${T.rootSource(status.hostRootSource)}${T.sep}${String(status.hostRoot)}` : T.rootMissingShort
     let preValue = T.unknown
@@ -1613,9 +2246,16 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
     return h("div", { style: S.panel },
       restart === null ? h(NextStepCard, { step, busy, onRun, notice: nextNotice }) : restartView,
-      confirmView ?? null,
-      h(Card, { title: T.stepsTitle, titleId: "bkl-steps-title", desc: T.stepsDesc },
-        h(StepList, { items: stepItems(f), onGo })),
+      // 首次使用步骤可收起：用得熟了以后不占地方，状态看上面的下一步卡。
+      h(Card, {
+        title: T.stepsTitle, titleId: "bkl-steps-title", desc: T.stepsDesc,
+        aside: h(Button, {
+          kind: "quiet", size: "small",
+          label: guideOpen ? T.guideHide : T.guideShow,
+          onClick: onToggleGuide,
+        }, guideOpen ? T.guideHide : T.guideShow),
+      },
+        guideOpen ? h(StepList, { items: stepItems(f), onGo }) : null),
       h(Card, { title: T.statusTitle, titleId: "bkl-status-title", desc: T.statusDesc },
         h(Rows, {
           items: [
@@ -1638,6 +2278,15 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                 hint: T.opId(String(f.applied.operationId ?? T.unknown)),
               },
             { id: "rules", label: T.rowRules, value: rulesValue, tone: f.activeRule === null ? undefined : "ok" },
+            {
+              id: "words", label: T.rowWords,
+              value: words.phase !== "ready" || words.stale
+                ? T.wordsSummaryFailed
+                : words.entries.length === 0 ? T.wordsSummaryEmpty : T.wordsSummaryCount(words.entries.length),
+              tone: words.phase !== "ready" || words.stale ? "warn" : undefined,
+              hint: T.wordsSummaryHint,
+              control: h(Button, { size: "small", label: T.manageWords, onClick: () => { onGo("words") } }, T.manageWords),
+            },
             {
               id: "prompt", label: T.rowPrompt,
               value: f.customPrompt ? T.promptMine(formatBytes(override?.bytes)) : T.promptBuiltin,
@@ -1718,7 +2367,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           typeof target?.after === "string" ? h("pre", { style: S.codeBlock }, target.after) : null))))
   }
 
-  function PatchesPage({ f, patchInfo, patchError, busy, toggles, confirmOpen, onToggle, onApply, onRevert, onRun, onCopy, confirmView, noticeView, restartView }) {
+  function PatchesPage({ f, patchInfo, patchError, busy, toggles, onToggle, onApply, onRevert, onRun, onCopy, noticeView, restartView }) {
     const applyWhy = applyReason(f, busy, toggles)
     const revertWhy = revertReason(f, busy)
     const findingFor = (item) => f.findings.find(finding => finding?.patchId === item?.patchId && finding?.path === item?.path)
@@ -1753,21 +2402,18 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         : h("ul", { style: S.list, "aria-labelledby": "bkl-patches-title" },
           f.patches.map(patch => h(PatchCard, { key: patch.id, patch, f, pendingValue: toggles[patch.id], busy, onToggle }))),
       h("div", { style: S.actionBar },
-        confirmView ?? null,
         noticeView ?? null,
-        confirmOpen
-          ? null
-          : h("div", { style: S.row },
-            h(Button, { kind: "primary", off: applyWhy !== null, reason: applyWhy, describedBy: "bkl-apply-why", onClick: onApply },
-              f.pendingFiles > 0 ? T.applyN(f.pendingFiles) : T.apply),
-            h(Button, { kind: "quietDanger", off: revertWhy !== null, reason: revertWhy, describedBy: "bkl-revert-why", onClick: onRevert }, T.revert)),
-        confirmOpen ? null : h("p", { id: "bkl-apply-why", style: S.small }, applyWhy ?? T.applyHint),
-        confirmOpen ? null : h("p", { id: "bkl-revert-why", style: S.small }, revertWhy ?? T.revertHint(f.applied?.files ?? 0))))
+        h("div", { style: S.row },
+          h(Button, { kind: "primary", off: applyWhy !== null, reason: applyWhy, describedBy: "bkl-apply-why", onClick: onApply },
+            f.pendingFiles > 0 ? T.applyN(f.pendingFiles) : T.apply),
+          h(Button, { kind: "quietDanger", off: revertWhy !== null, reason: revertWhy, describedBy: "bkl-revert-why", onClick: onRevert }, T.revert)),
+        h("p", { id: "bkl-apply-why", style: S.small }, applyWhy ?? T.applyHint),
+        h("p", { id: "bkl-revert-why", style: S.small }, revertWhy ?? T.revertHint(f.applied?.files ?? 0))))
   }
 
   // ---- 提示词与规则 ---------------------------------------------------------
 
-  function ModeBlock({ mode, pendingMode, onPick, confirmView, noticeView }) {
+  function ModeBlock({ mode, pendingMode, onPick, noticeView }) {
     const options = MODES.map(id => {
       const recommended = id === "recommended"
       return {
@@ -1786,48 +2432,56 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     })
     return h(Card, { title: T.modeTitle, titleId: "bkl-mode-title", desc: T.modeDesc },
       h(RadioCards, { group: "mode", labelledBy: "bkl-mode-title", options, value: mode, onSelect: onPick }),
-      confirmView ?? null,
       noticeView ?? null)
   }
 
-  function PromptBlock({ override, draft, setDraft, busy, onSave, onReset, onCopy, confirmView, noticeView }) {
+  function PromptBlock({ override, promptError, draft, setDraft, busy, onSave, onReset, onDiscard, onCopy, onRetry, noticeView }) {
+    // 读不到正文时，空编辑器和内置正文都是错的展示：内容未知就只说未知，
+    // 编辑、保存、恢复内置全部暂停，避免用户拿一个空壳去覆盖真实正文。
+    const loaded = override !== null && promptError === null
     const saved = typeof override?.text === "string" ? override.text : ""
     const value = draft ?? saved
     const dirty = draft !== null && draft !== saved
     const mine = override?.userFileExists === true
     const effectiveBad = override?.effective && override.effective.ok === false
-    const saveWhy = busy ? T.whyBusy : !dirty ? T.whyNoChange : value.trim() === "" ? T.whyEmptyPrompt : null
-    const resetWhy = busy ? T.whyBusy : !mine ? T.whyAlreadyBuiltin : null
+    const saveWhy = !loaded ? T.whyPromptUnread : busy ? T.whyBusy : !dirty ? T.whyNoChange : value.trim() === "" ? T.whyEmptyPrompt : null
+    const resetWhy = !loaded ? T.whyPromptUnread : busy ? T.whyBusy : !mine ? T.whyAlreadyBuiltin : null
     return h(Card, {
       title: T.promptTitle,
       titleId: "bkl-prompt-title",
       desc: T.promptDesc,
       descId: "bkl-prompt-desc",
-      aside: h(Tag, { tone: mine ? "accent" : undefined }, mine ? T.promptUsingMine(formatBytes(override?.bytes)) : T.promptUsingBuiltin),
+      aside: h(Tag, { tone: loaded ? (mine ? "accent" : undefined) : "error" },
+        loaded ? (mine ? T.promptUsingMine(formatBytes(override?.bytes)) : T.promptUsingBuiltin) : T.promptCountUnknown),
     },
+      promptError === null
+        ? null
+        : h(Notice, { notice: { tone: "error", title: T.promptReadFailedTitle, next: T.promptReadFailedNext, action: "retryPrompt" }, onAction: () => { onRetry?.() } }),
       effectiveBad
         ? h(Notice, { notice: { tone: "warn", title: T.injectBad(override.effective.code), next: T.injectBadNext } })
         : null,
       h("textarea", {
         className: "bkl-input",
-        style: merge(S.input, S.textarea),
-        value,
-        placeholder: T.promptPlaceholder,
+        style: merge(S.input, S.textarea, !loaded && S.inputLocked),
+        value: loaded ? value : "",
+        placeholder: loaded ? T.promptPlaceholder : promptError === null ? T.loading : T.promptUnknownPlaceholder,
         spellCheck: false,
+        readOnly: loaded ? undefined : true,
+        "aria-invalid": promptError === null ? undefined : "true",
         "aria-labelledby": "bkl-prompt-title",
         "aria-describedby": "bkl-prompt-desc bkl-prompt-why",
-        onChange: (event) => { setDraft(event.target.value) },
+        onChange: (event) => { if (loaded) setDraft(event.target.value) },
       }),
       h("div", { style: S.row },
-        h("span", { style: S.caption }, T.promptCount(value.length, formatBytes(utf8Length(value)))),
+        h("span", { style: S.caption }, loaded ? T.promptCount(value.length, formatBytes(utf8Length(value))) : T.promptCountUnknown),
         dirty ? h(Tag, { tone: "warn" }, T.promptDirty) : null,
         h("span", { style: S.spacer }),
-        dirty ? h(Button, { kind: "quiet", size: "small", onClick: () => { setDraft(null) } }, T.discard) : null,
-        h(Button, { kind: "quiet", size: "small", onClick: () => { onCopy(value) } }, T.copyAll),
+        dirty ? h(Button, { kind: "quiet", size: "small", onClick: () => { onDiscard?.() } }, T.discard) : null,
+        h(Button, { kind: "quiet", size: "small", off: !loaded, reason: T.whyPromptUnread, onClick: () => { onCopy(value) } }, T.copyAll),
         h(Button, { kind: "quietDanger", size: "small", off: resetWhy !== null, reason: resetWhy, onClick: onReset }, T.resetBuiltin),
         h(Button, { kind: dirty ? "primary" : "plain", off: saveWhy !== null, reason: saveWhy, describedBy: "bkl-prompt-why", onClick: onSave }, T.save)),
-      h("p", { id: "bkl-prompt-why", style: S.small }, saveWhy ?? T.saveHint),
-      confirmView ?? null,
+      h("p", { id: "bkl-prompt-why", style: S.small },
+        saveWhy ?? (busy ? T.promptSavingHint : T.saveHint)),
       noticeView ?? null)
   }
 
@@ -1911,9 +2565,36 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       saveWhy ? h("p", { id: "bkl-rule-save-why", style: S.small }, saveWhy) : null)
   }
 
-  function RulesBlock({ rules, activeRule, rulesIndex, rulesIndexPath, edit, busy, onNew, onEdit, onEditChange, onSave, onCancelEdit, onActivate, onDeactivate, onDelete, onRecover, confirmView, noticeView }) {
+  function RuleDetail({ rule, activeRule, body, busy, onEdit, onActivate, onDeactivate, onDelete, onRetryBody }) {
+    const active = rule.id === activeRule
+    return h("section", { style: S.card, "aria-labelledby": "bkl-rule-detail-title" },
+      h("span", { style: S.fieldLabel }, T.ruleDetailsTitle),
+      h("div", { style: S.row },
+        h("h3", { id: "bkl-rule-detail-title", style: merge(S.cardTitle, { overflowWrap: "anywhere" }) }, rule.name || rule.id),
+        rule.name && rule.name !== rule.id ? h("span", { style: S.code }, rule.id) : null,
+        active ? h(Tag, { tone: "ok" }, T.ruleActiveTag) : null),
+      h("p", { style: S.small }, T.ruleMeta(rule.target, formatBytes(rule.bytes))),
+      h("p", { style: S.small }, active ? T.ruleDetailActive(rule.target) : T.ruleDetailInactive(rule.target)),
+      body.status === "failed"
+        ? h(Notice, { notice: { tone: "error", title: T.ruleBodyFailed, next: T.ruleBodyFailedNext } })
+        : null,
+      body.status === "failed"
+        ? h("div", { style: S.row }, h(Button, { size: "small", onClick: onRetryBody }, T.ruleBodyRetry))
+        : body.status === "ok"
+          ? h("pre", { style: merge(S.codeBlock, { whiteSpace: "pre-wrap" }) }, body.text)
+          : h("p", { style: S.small }, T.ruleBodyLoading),
+      h("div", { style: S.row },
+        h(Button, { size: "small", off: busy, reason: T.whyBusy, label: T.editRule(rule.name || rule.id), onClick: () => { onEdit(rule.id) } }, T.edit),
+        active
+          ? h(Button, { size: "small", off: busy, reason: T.whyBusy, label: T.deactivateRule(rule.name || rule.id), onClick: () => { onDeactivate(rule) } }, T.deactivate)
+          : h(Button, { kind: "primary", size: "small", off: busy, reason: T.whyBusy, label: T.activateRule(rule.name || rule.id), onClick: () => { onActivate(rule) } }, T.activate),
+        h(Button, { kind: "quietDanger", size: "small", off: busy, reason: T.whyBusy, label: T.deleteRule(rule.name || rule.id), onClick: () => { onDelete(rule) } }, T.del)))
+  }
+
+  function RulesBlock({ rules, activeRule, rulesIndex, rulesIndexPath, selectedId, body, edit, busy, onNew, onOpen, onEdit, onEditChange, onSave, onCancelEdit, onActivate, onDeactivate, onDelete, onRecover, onRetryBody, noticeView }) {
     const isCorrupt = rulesIndex === "corrupt"
     const newWhy = busy ? T.whyBusy : isCorrupt ? T.whyRulesCorrupt : null
+    const selected = rules.find((rule) => rule.id === selectedId) ?? rules.find((rule) => rule.id === activeRule) ?? rules[0] ?? null
     return h(Card, {
       title: T.rulesTitle,
       titleId: "bkl-rules-title",
@@ -1944,62 +2625,311 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           action: h(Button, { kind: "primary", off: newWhy !== null, reason: newWhy, onClick: onNew }, T.newFirstRule),
         })
         : null,
+      // 列表、详情、编辑是三个面：列表选中，详情看正文与操作，编辑只管改草稿。
       rules.length === 0
-        ? null
-        : h("ul", { style: S.rows, "aria-labelledby": "bkl-rules-title" },
-          rules.map((rule, index) => {
-            const label = rule.name || rule.id
-            const active = rule.id === activeRule
-            return h("li", { key: rule.id, style: merge(S.ruleRow, index === 0 && S.ruleRowFirst) },
-              h("div", { style: S.ruleMain },
-                h("div", { style: S.row },
-                  h(Dot, { tone: active ? "ok" : "idle" }),
-                  h("span", { style: S.strong }, label),
-                  label !== rule.id ? h("span", { style: S.code }, rule.id) : null,
-                  active ? h(Tag, { tone: "ok" }, T.ruleActiveTag) : null),
-                h("p", { style: S.small }, T.ruleMeta(rule.target, formatBytes(rule.bytes)))),
-              h("div", { style: S.ruleActions },
-                h(Button, { kind: "quiet", size: "small", off: busy, reason: T.whyBusy, label: T.editRule(label), onClick: () => { onEdit(rule.id) } }, T.edit),
-                active
-                  ? h(Button, { size: "small", off: busy, reason: T.whyBusy, label: T.deactivateRule(label), onClick: () => { onDeactivate(rule) } }, T.deactivate)
-                  : h(Button, { size: "small", off: busy, reason: T.whyBusy, label: T.activateRule(label), onClick: () => { onActivate(rule) } }, T.activate),
-                h(Button, { kind: "quietDanger", size: "small", off: busy, reason: T.whyBusy, label: T.deleteRule(label), onClick: () => { onDelete(rule) } }, T.del)))
-          })),
-      confirmView ?? null,
-      noticeView ?? null,
-      edit === null ? null : h(RuleEditor, { edit, rules, activeRule, busy, onChange: onEditChange, onSave, onCancel: onCancelEdit, onOpenExisting: onEdit }))
+        ? (edit === null ? null : h(RuleEditor, { edit, rules, activeRule, busy, onChange: onEditChange, onSave, onCancel: onCancelEdit, onOpenExisting: onEdit }))
+        : h("div", { style: S.ruleLayout },
+          h("div", { style: S.ruleNav },
+            h("span", { style: S.fieldLabel }, T.rulesTitle),
+            h("nav", { style: S.ruleList, "aria-label": T.rulesTitle },
+              rules.map((rule) => {
+                const active = rule.id === activeRule
+                const picked = selected !== null && rule.id === selected.id
+                return h("button", {
+                  key: rule.id,
+                  type: "button",
+                  className: "bkl-hover",
+                  style: merge(S.ruleItem, picked && S.ruleItemOn),
+                  "aria-current": picked ? "true" : undefined,
+                  "aria-label": T.ruleSelect(rule.name || rule.id),
+                  onClick: () => { onOpen(rule.id) },
+                },
+                  h("span", { style: merge(S.strong, { overflowWrap: "anywhere" }) }, rule.name || rule.id),
+                  h("span", { style: merge(S.small, { overflowWrap: "anywhere" }) }, rule.target),
+                  active ? h(Tag, { tone: "ok" }, T.ruleActiveTag) : null)
+              })),
+            h("div", { style: S.helpBox },
+              h("p", { style: S.small }, T.rulesDesc),
+              h(Button, {
+                kind: "quiet", size: "small", onClick: onRecover,
+                off: !isCorrupt, reason: T.whyRulesCorrupt,
+              }, T.recoverRules))),
+          h("div", { style: S.rulePane },
+            edit !== null
+              ? h(RuleEditor, { edit, rules, activeRule, busy, onChange: onEditChange, onSave, onCancel: onCancelEdit, onOpenExisting: onEdit })
+              : selected === null
+                ? null
+                : h(RuleDetail, {
+                  rule: selected, activeRule, body, busy, onEdit, onActivate, onDeactivate, onDelete, onRetryBody,
+                }))),
+      noticeView ?? null)
   }
 
-  function ContextPage(props) {
+  // ---- 词库页 ---------------------------------------------------------------
+  //
+  // 列表、搜索、新增/编辑/删除都在这里；本地预览只用已保存的词库，搜索不会改变
+  // 预览范围。预览输出是纯文本节点，用户输入永远不会被当成 HTML 执行。
+
+  function WordsPage({ store, query, setQuery, previewText, setPreviewText, restartView, noticeView, onAdd, onEdit, onDelete, onRetryRead, onReturnChat, canReturn }) {
+    const locked = store.phase !== "ready" || store.stale || store.saving
+    const entries = store.entries
+    const limits = store.limits
+    const needle = query.trim().toLowerCase()
+    const rows = entries
+      .map((entry, index) => ({ entry, index }))
+      .filter((item) => needle === "" || item.entry.from.toLowerCase().includes(needle) || item.entry.to.toLowerCase().includes(needle))
+    const preview = locked ? null : maskPreview(previewText, entries)
+    const previewSummary = locked
+      ? T.wordsPreviewPaused
+      : entries.length === 0 ? T.wordsPreviewEmptyList
+        : previewText.trim() === "" ? T.wordsPreviewInputHint
+          : preview.matched.length > 0 ? T.wordsPreviewHit(preview.matched.length)
+            : T.wordsPreviewMiss
     return h("div", { style: S.panel },
-      props.restartView ?? null,
-      h(ModeBlock, props.mode),
-      h(PromptBlock, props.prompt),
-      h(RulesBlock, props.rules))
+      restartView ?? null,
+      h(Card, {
+        title: T.wordsTitle,
+        titleId: "bkl-words-title",
+        desc: T.wordsLead,
+        descId: "bkl-words-lead",
+        aside: canReturn
+          ? h(Button, { size: "small", onClick: onReturnChat }, T.wordsFromChatReturn)
+          : null,
+      },
+        h("p", { style: S.small }, T.wordsScope)),
+      locked
+        ? h(Notice, {
+          notice: {
+            tone: "error",
+            title: T.wordsReadFailedTitle,
+            next: entries.length > 0 ? T.wordsReadFailedStale(entries.length) : T.wordsReadFailedUnknown,
+            action: "retryAlias",
+          },
+          onAction: () => { onRetryRead() },
+        })
+        : null,
+      noticeView ?? null,
+      h("div", { style: S.wordLayout },
+        h("section", { style: S.wordMain, "aria-labelledby": "bkl-words-list-title" },
+          h("div", { style: S.row },
+            h("h3", { id: "bkl-words-list-title", style: S.cardTitle }, T.aliasTitle),
+            h(Tag, { tone: store.stale ? "warn" : undefined },
+              `${store.stale ? `${T.wordsStaleTag}${T.sep}` : ""}${T.wordsCount(entries.length, limits.maxEntries)}`),
+            h("span", { style: S.spacer }),
+            h(Button, {
+              kind: "primary", size: "small", label: T.wordsAdd,
+              off: locked, reason: locked ? T.wordsReadFailedTitle : undefined,
+              onClick: onAdd,
+            }, T.wordsAdd)),
+          entries.length >= limits.maxEntries
+            ? h("p", { style: S.small }, T.wordsLimitNote(limits.maxEntries))
+            : null,
+          h("div", { style: S.wordToolbar },
+            h("div", { style: S.wordSearchWrap },
+              h("span", { style: S.wordSearchIcon, "aria-hidden": "true" }, "\u2315"),
+              h("label", { htmlFor: "bkl-word-search", className: "sr-only" }, T.wordsSearchLabel),
+              h("input", {
+                id: "bkl-word-search",
+                className: "bkl-input",
+                type: "search",
+                style: merge(S.input, S.wordSearch),
+                value: query,
+                placeholder: T.wordsSearchLabel,
+                onChange: (event) => { setQuery(event.target.value) },
+              }),
+              query === ""
+                ? null
+                : h("div", { style: S.wordSearchClear },
+                  h(Button, { kind: "quiet", size: "small", label: T.wordsSearchClear, onClick: () => { setQuery("") } }, "\u00d7"))),
+          ),
+          entries.length === 0
+            ? h(Empty, {
+              title: T.wordsEmptyTitle,
+              body: T.wordsEmptyBody,
+              action: h(Button, {
+                kind: "primary", size: "small", off: locked, label: T.wordsEmptyAdd, onClick: onAdd,
+              }, T.wordsEmptyAdd),
+            })
+            : rows.length === 0
+              ? h(Empty, {
+                title: T.wordsNoMatchTitle,
+                body: T.wordsNoMatchBody,
+                action: h(Button, { size: "small", onClick: () => { setQuery("") } }, T.wordsSearchClear),
+              })
+              : h("ul", { style: merge(S.wordList, store.stale && S.wordStale), "aria-labelledby": "bkl-words-list-title" },
+                rows.map((item, row) => h("li", { key: `${String(item.index)}:${item.entry.from}`, style: merge(S.wordRow, row === 0 && S.wordRowFirst) },
+                  h("div", { style: S.wordCells },
+                    h("span", { style: S.wordCell }, item.entry.from),
+                    h("span", { "aria-hidden": "true", style: { color: tk.label3 } }, "\u2192"),
+                    h("span", { style: S.wordCell }, item.entry.to)),
+                  h("div", { style: S.wordActions },
+                    h(Button, {
+                      kind: "quiet", size: "small", label: T.wordsEditLabel(item.entry.from),
+                      off: locked, onClick: () => { onEdit(item.index) },
+                    }, T.edit),
+                    h(Button, {
+                      kind: "quietDanger", size: "small", label: T.wordsDeleteLabel(item.entry.from),
+                      off: locked, onClick: () => { onDelete(item.index) },
+                    }, T.del))))),
+          h("p", { style: S.small }, T.wordsEachSave)),
+        h("aside", { style: merge(S.card, S.wordAside), "aria-labelledby": "bkl-words-preview-title" },
+          h("h3", { id: "bkl-words-preview-title", style: S.cardTitle }, T.wordsPreviewTitle),
+          h("p", { style: S.small }, T.wordsPreviewDesc),
+          h("div", { style: S.field },
+            h("label", { htmlFor: "bkl-word-preview", style: S.fieldLabel }, T.wordsPreviewInput),
+            h("textarea", {
+              id: "bkl-word-preview",
+              className: "bkl-input",
+              style: merge(S.input, { minHeight: "84px" }),
+              value: previewText,
+              placeholder: T.wordsPreviewPlaceholder,
+              spellCheck: false,
+              readOnly: locked,
+              onChange: (event) => { setPreviewText(event.target.value) },
+            })),
+          h("div", { style: S.row },
+            h("span", { style: S.fieldLabel }, T.wordsPreviewOutput),
+            h("span", { style: S.spacer }),
+            h("span", { style: S.caption }, T.wordsPreviewLocal)),
+          h("pre", { style: S.wordPreviewBox, "aria-live": "polite" }, locked ? "" : preview.text),
+          h("p", { style: S.small }, previewSummary),
+          locked || preview.matched.length === 0
+            ? null
+            : h("div", { style: S.wordChips },
+              preview.matched.map((from) => {
+                const entry = entries.find((item) => item.from === from)
+                return h("div", { key: from, style: S.wordChip }, `${from} \u2192 ${entry?.to ?? ""}`)
+              })),
+          h("details", null,
+            h("summary", { style: S.small }, T.wordsPreviewRulesTitle),
+            h("p", { style: S.small }, T.wordsPreviewRules1),
+            h("p", { style: S.small }, T.wordsPreviewRules2)))))
+  }
+
+  /** 词条编辑弹窗的正文与按钮。phase 决定显示编辑表单还是覆盖/合并/放弃确认。 */
+  function WordEditor({ editor, entries, limits, saving, error, onField, onSave, onCancel, onBack, onConfirmOverwrite, onConfirmDiscard }) {
+    const errors = wordEntryErrors(editor.from, editor.to, {
+      originalFrom: editor.originalFrom, entries, maxEntries: limits.maxEntries, maxTerm: limits.maxTerm,
+    })
+    const invalid = errors.from !== "" || errors.to !== "" || errors.limit !== ""
+    const dirty = editor.from !== editor.baselineFrom || editor.to !== editor.baselineTo
+    const pair = (entry) => h(Pair, { key: `${String(entry.from)}:${String(entry.to)}`, entry })
+    if (editor.phase === "discard") {
+      return {
+        title: T.wordDiscardTitle,
+        tone: "error",
+        body: h("p", { style: S.text }, T.wordDiscardBody),
+        foot: [
+          h(Button, { key: "back", onClick: onBack }, T.wordKeepEdit),
+          h(Button, { key: "yes", kind: "danger", onClick: onConfirmDiscard }, T.wordDiscardYes),
+        ],
+      }
+    }
+    if (editor.phase === "overwrite" || editor.phase === "merge") {
+      const current = editor.originalFrom === null
+        ? null
+        : entries.find((item) => item.from === editor.originalFrom) ?? null
+      const duplicate = entries.find((item) => item.from === editor.from.trim()) ?? null
+      const final = { from: editor.from.trim(), to: editor.to.trim() }
+      return {
+        title: editor.phase === "merge" ? T.wordMergeTitle : T.wordOverwriteTitle(final.from),
+        tone: "error",
+        body: h("div", { style: S.wordEditorFields },
+          h("p", { style: S.text }, editor.phase === "merge" ? T.wordMergeBody : T.wordOverwriteBody),
+          current === null ? null : h("span", { style: S.fieldLabel }, T.wordMergeCurrent),
+          current === null ? null : pair(current),
+          duplicate === null ? null : h("span", { style: S.fieldLabel }, T.wordMergeDuplicate),
+          duplicate === null ? null : pair(duplicate),
+          h("span", { style: S.fieldLabel }, T.wordMergeFinal),
+          pair(final)),
+        foot: [
+          h(Button, { key: "back", onClick: onBack }, T.wordBackEdit),
+          h(Button, {
+            key: "yes", kind: "danger", onClick: onConfirmOverwrite,
+          }, editor.phase === "merge" ? T.wordMergeYes : T.wordOverwriteYes),
+        ],
+      }
+    }
+    const field = (key, label, placeholder, errorText) => h("div", { key, style: S.field },
+      h("label", { htmlFor: `bkl-word-${key}`, style: S.fieldLabel }, label),
+      h("input", {
+        id: `bkl-word-${key}`,
+        className: "bkl-input",
+        style: S.input,
+        value: editor[key],
+        placeholder,
+        spellCheck: false,
+        autoComplete: "off",
+        readOnly: saving ? true : undefined,
+        "aria-invalid": editor.touched && errorText !== "" ? "true" : undefined,
+        "aria-describedby": `bkl-word-${key}-error bkl-word-${key}-cap`,
+        onChange: (event) => { onField(key, event.target.value) },
+      }),
+      h("div", { style: S.row },
+        h("span", { id: `bkl-word-${key}-error`, style: merge(S.fieldError, { flex: "1 1 auto" }) }, editor.touched ? errorText : ""),
+        h("span", { id: `bkl-word-${key}-cap`, style: S.wordCounter }, T.wordCap(String(editor[key]).trim().length))))
+    return {
+      title: editor.originalFrom === null ? T.wordEditorAddTitle : T.wordEditorEditTitle,
+      tone: "accent",
+      body: h("div", { style: S.wordEditorFields },
+        h("p", { style: S.small }, T.wordEditorHint),
+        field("from", T.wordFromLabel, T.wordFromPlaceholder, errors.from),
+        field("to", T.wordToLabel, T.wordToPlaceholder, errors.to),
+        errors.limit === "" ? null : h("p", { style: S.fieldError }, errors.limit),
+        error === null ? null : h(Notice, { notice: error })),
+      foot: [
+        h("p", { key: "why", style: S.dialogNote },
+          saving ? T.wordSavingNote : invalid ? errors.limit || errors.from || errors.to : !dirty ? T.wordNoChange : T.wordSaveNote),
+        h(Button, { key: "cancel", onClick: onCancel, off: saving, reason: T.wordSavingNote }, T.cancel),
+        h(Button, {
+          key: "save", kind: "primary", onClick: onSave,
+          off: invalid || !dirty || saving, reason: T.wordSaveNote,
+          autofocus: true,
+        }, saving ? T.saving : T.wordSave),
+      ],
+    }
   }
 
   // ---- 分区根 ---------------------------------------------------------------
 
-  function Section() {
+  function Section(props) {
+    // 宿主给设置分区传 close：从会话浮窗进来的「返回会话」用它。
+    const closeSettings = typeof props?.close === "function" ? props.close : null
     const [tab, setTab] = useState(TAB_KEYS[0])
     const [status, setStatus] = useState(null)
     const [loadError, setLoadError] = useState(null)
     const [patchInfo, setPatchInfo] = useState(null)
     const [patchError, setPatchError] = useState(null)
     const [override, setOverride] = useState(null)
+    const [promptError, setPromptError] = useState(null)
     const [tierInfo, setTierInfo] = useState(null)
     const [loadedAt, setLoadedAt] = useState(0)
     const [busy, setBusy] = useState(false)
     const [toggles, setToggles] = useState({})
     const [enabledPending, setEnabledPending] = useState(false)
-    const [confirm, setConfirm] = useState(null)
+    const [dialog, setDialog] = useState(null)
     const [notices, setNotices] = useState({})
     const [restart, setRestart] = useState(null)
     const [draft, setDraft] = useState(null)
+    const [guideOpen, setGuideOpen] = useState(true)
     const [ruleEdit, setRuleEdit] = useState(null)
+    const [selectedRuleId, setSelectedRuleId] = useState(null)
+    const [ruleBody, setRuleBody] = useState({ id: null, status: "idle", text: "" })
+    const [wordEditor, setWordEditor] = useState(null)
+    const [wordSaving, setWordSaving] = useState(false)
+    const [wordSaveError, setWordSaveError] = useState(null)
+    const [wordsQuery, setWordsQuery] = useState("")
+    const [wordsPreview, setWordsPreview] = useState("")
     const [, bump] = useState(0)
     const mounted = useRef(true)
     const noticeTimers = useRef({})
+    // 正文草稿的影子副本：保存完成后要判断「保存期间是不是又输入了」，
+    // 而那时闭包里的 draft 是旧值，只能信实时副本。
+    const draftRef = useRef(null)
+    const setPromptDraft = useCallback((value) => {
+      draftRef.current = typeof value === "function" ? value(draftRef.current) : value
+      setDraft(draftRef.current)
+    }, [])
 
     useEffect(() => {
       mounted.current = true
@@ -2032,20 +2962,21 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       return () => { clearInterval(timer) }
     }, [])
 
-    // 页面卸载或刷新时拦截未保存草稿。
+    // 页面卸载或刷新时拦截未保存草稿（正文、规则、词条编辑器）。
     useEffect(() => {
       if (typeof window === "undefined" || typeof window.addEventListener !== "function") return undefined
       const onBeforeUnload = (event) => {
         const ruleDirty = isRuleEditDirty(ruleEdit)
         const promptDirty = draft !== null && draft !== (typeof override?.text === "string" ? override.text : "")
-        if (ruleDirty || promptDirty) {
+        const wordDirty = wordEditor !== null && (wordEditor.from !== wordEditor.baselineFrom || wordEditor.to !== wordEditor.baselineTo)
+        if (ruleDirty || promptDirty || wordDirty) {
           event.preventDefault()
           event.returnValue = ""
         }
       }
       window.addEventListener("beforeunload", onBeforeUnload)
       return () => { window.removeEventListener("beforeunload", onBeforeUnload) }
-    }, [ruleEdit, draft, override])
+    }, [ruleEdit, draft, override, wordEditor])
 
     const clearNotice = useCallback((scope) => {
       const timer = noticeTimers.current[scope]
@@ -2066,7 +2997,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       if (timer !== undefined) clearTimeout(timer)
       delete noticeTimers.current[scope]
       setNotices(prev => ({ ...prev, [scope]: notice }))
-      if (notice.tone === "ok" || notice.tone === "info") {
+      // 重要结果就地保留（sticky）；一般成功提示才自动收。
+      if ((notice.tone === "ok" || notice.tone === "info") && notice.sticky !== true) {
         noticeTimers.current[scope] = setTimeout(() => {
           delete noticeTimers.current[scope]
           if (mounted.current) setNotices(prev => (prev[scope] === notice ? { ...prev, [scope]: undefined } : prev))
@@ -2091,12 +3023,26 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       } else {
         setPatchError(explain(patchResult.reason))
       }
-      if (overrideResult.status === "fulfilled") setOverride(overrideResult.value.data ?? null)
+      if (overrideResult.status === "fulfilled") {
+        setOverride(overrideResult.value.data ?? null)
+        setPromptError(null)
+      } else {
+        // 读不到正文就是读不到：不能把界面退回到空正文或内置正文。
+        setPromptError(explain(overrideResult.reason))
+      }
       if (tierResult.status === "fulfilled") setTierInfo(tierResult.value.data ?? null)
+      // 「刷新」是重新检查：词库也一起重读，读取失败才能在这里现形。
+      void aliasStore.read()
       setLoadedAt(Date.now())
     }, [])
 
     useEffect(() => { void load() }, [load])
+
+    // 词库是两个挂载点共用的一份状态（见 createAliasStore）；这里只订阅重绘。
+    useEffect(() => {
+      void aliasStore.read()
+      return aliasStore.subscribe(() => { if (mounted.current) bump(value => value + 1) })
+    }, [])
 
     // 浮窗改了档位或词表，这里那份状态就旧了。两个挂载点各持一份 state，
     // 用事件而不是共享 store：只需要「重新拉一次」，不需要新的全局状态层。
@@ -2106,6 +3052,43 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       window.addEventListener(STATE_CHANGED_EVENT, onStateChanged)
       return () => { window.removeEventListener(STATE_CHANGED_EVENT, onStateChanged) }
     }, [load])
+
+    // 浮窗的「管理词库」：分区已挂载就直接切页；没挂载则记下待落地页签。
+    useEffect(() => {
+      if (pendingTabRequest !== null) {
+        const wanted = pendingTabRequest
+        pendingTabRequest = null
+        setTab(wanted)
+      }
+      if (typeof window === "undefined" || typeof window.addEventListener !== "function") return undefined
+      const onNavigate = (event) => {
+        const detail = event?.detail
+        if (detail === null || typeof detail !== "object") return
+        detail.handled = true
+        if (typeof detail.tab === "string" && TAB_KEYS.includes(detail.tab)) setTab(detail.tab)
+      }
+      window.addEventListener(NAVIGATE_EVENT, onNavigate)
+      return () => { window.removeEventListener(NAVIGATE_EVENT, onNavigate) }
+    }, [])
+
+    // 五个页签在窄屏横排滚动；选中项要在切页后和窗口变化后都保持可见。
+    useEffect(() => {
+      revealSelectedTab(tab)
+      if (typeof window === "undefined" || typeof window.addEventListener !== "function") return undefined
+      const onResize = () => { revealSelectedTab(tab) }
+      window.addEventListener("resize", onResize)
+      return () => { window.removeEventListener("resize", onResize) }
+    }, [tab])
+
+    // 规则详情正文按需读取：选中项变了就拉一次；失败停在失败态，可以重试。
+    useEffect(() => {
+      if (status === null) return
+      const rules = Array.isArray(status.rules) ? status.rules : []
+      const activeRule = typeof status.activeRule === "string" ? status.activeRule : null
+      const selected = rules.find((rule) => rule.id === selectedRuleId) ?? rules.find((rule) => rule.id === activeRule) ?? rules[0]
+      if (selected === undefined) return
+      if (ruleBody.id !== selected.id || ruleBody.status === "idle") loadRuleBody(selected.id)
+    }, [status, selectedRuleId])
 
     /** 写操作的统一外壳：同一时刻只跑一个；失败就近报错；reload 为真时无论成败都重新拉状态。 */
     const run = useCallback(async (scope, work, reload) => {
@@ -2129,14 +3112,19 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
     const goTab = useCallback((key) => {
       setTab(key)
-      setConfirm(null)
+      setDialog(null)
     }, [])
 
+    // 所有确认（应用、回退、切档、覆盖、删除、恢复）共用一个弹窗：确认才执行，
+    // Esc / 取消 / 点遮罩都原样退出，不留下半截状态。
+    const openDialog = useCallback((spec) => { setDialog(spec) }, [])
+    const closeDialog = useCallback(() => { setDialog(null) }, [])
+
     const accept = useCallback(() => {
-      const current = confirm
-      setConfirm(null)
-      if (current !== null) void current.run()
-    }, [confirm])
+      const current = dialog
+      setDialog(null)
+      if (current !== null && typeof current.run === "function") void current.run()
+    }, [dialog])
 
     // ---- 重启 ----
 
@@ -2171,10 +3159,13 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const runAction = useCallback((action) => {
       if (action === "retry" || action === "refresh") void load()
       else if (action === "goPatches") goTab("patches")
-      else if (action === "goContext") goTab("context")
+      else if (action === "goPrompt") goTab("prompt")
+      else if (action === "goRules") goTab("rules")
+      else if (action === "goWords") goTab("words")
       else if (action === "goOverview") goTab("overview")
       else if (action === "copyRoot") void copy(T.nsRootSnippet, "next")
       else if (action === "copyRestart") void copyRestart()
+      else if (action === "retryAlias") void aliasStore.read()
       else if (action === "recoverRules") askRecoverRules("next")
     }, [load, goTab, copy, copyRestart])
 
@@ -2214,17 +3205,18 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const f = derive(status, patchInfo, tierInfo, override, restart)
 
     const askApply = () => {
-      setConfirm({
-        scope: "patches",
+      openDialog({
         title: T.confirmApplyTitle(f.pendingFiles),
-        body: T.confirmApplyBody,
-        items: f.pendingPaths,
+        body: h("div", { style: S.wordEditorFields },
+          h("p", { style: S.text }, T.confirmApplyBody),
+          h(PathList, { items: f.pendingPaths })),
         yes: T.confirmApplyYes(f.pendingFiles),
         run: () => run("patches", async () => {
           const payload = await post("/apply", {})
           const written = Array.isArray(payload.data?.written) ? payload.data.written.length : 0
           if (written === 0) {
-            notify("patches", { tone: "info", title: T.doneAlready })
+            // 待写入为零只说明磁盘已经是补丁后的样子，不能证明宿主重启过。
+            notify("patches", { tone: "info", title: T.doneAlready, next: T.doneAlreadyNext })
             return
           }
           notify("patches", { tone: "ok", title: T.doneApplied(written), next: T.doneAppliedNext })
@@ -2235,17 +3227,16 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
     const askRevert = () => {
       const count = Number(f.applied?.files) || 0
-      setConfirm({
-        scope: "patches",
+      openDialog({
         tone: "danger",
         title: T.confirmRevertTitle(count),
-        body: T.confirmRevertBody,
+        body: h("p", { style: S.text }, T.confirmRevertBody),
         yes: T.confirmRevertYes(count),
         run: () => run("patches", async () => {
           const payload = await post("/revert", {})
           const restored = Array.isArray(payload.data?.restored) ? payload.data.restored.length : 0
           if (restored === 0) {
-            notify("patches", { tone: "info", title: T.doneRevertNothing })
+            notify("patches", { tone: "info", title: T.doneRevertNothing, next: T.doneAlreadyNext })
             return
           }
           notify("patches", { tone: "ok", title: T.doneReverted(restored), next: T.doneAppliedNext })
@@ -2256,15 +3247,14 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
     const pickMode = (id) => {
       if (id === f.mode) {
-        if (confirm?.scope === "mode") setConfirm(null)
+        if (dialog !== null && dialog.pick !== undefined) closeDialog()
         return
       }
       const label = modeLabel(id)
-      setConfirm({
-        scope: "mode",
+      openDialog({
         pick: id,
         title: T.confirmModeTitle(label),
-        body: T.confirmModeBody,
+        body: h("p", { style: S.text }, T.confirmModeBody),
         yes: T.confirmModeYes,
         run: () => run("mode", async () => {
           await post("/tier", { tier: id })
@@ -2280,25 +3270,42 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         const payload = await post("/override", { text })
         await load()
         if (!mounted.current) return
-        setDraft(null)
-        notify("prompt", { tone: "ok", title: T.donePromptSaved(formatBytes(payload.data?.bytes)), next: T.saveHint })
+        // 保存期间继续输入的新内容不能被成功回调清掉：只收回提交过的那一份。
+        const remaining = draftAfterSave(draftRef.current, text)
+        setPromptDraft(remaining)
+        notify("prompt", remaining === null
+          ? { tone: "ok", title: T.donePromptSaved(formatBytes(payload.data?.bytes)), next: T.saveHint }
+          : { tone: "warn", title: T.donePromptSavedMore, next: T.donePromptSavedMoreNext })
       })
     }
 
     const askResetPrompt = () => {
-      setConfirm({
-        scope: "prompt",
+      openDialog({
         tone: "danger",
         title: T.confirmResetTitle,
-        body: T.confirmResetBody(formatBytes(override?.bytes)),
+        body: h("p", { style: S.text }, T.confirmResetBody(formatBytes(override?.bytes))),
         yes: T.confirmResetYes,
         run: () => run("prompt", async () => {
           await post("/override", { text: "" })
           await load()
           if (!mounted.current) return
-          setDraft(null)
+          setPromptDraft(null)
           notify("prompt", { tone: "ok", title: T.donePromptReset })
         }),
+      })
+    }
+
+    const askDiscardPrompt = () => {
+      if (draft === null) return
+      openDialog({
+        tone: "danger",
+        title: T.confirmDiscardPromptTitle,
+        body: h("p", { style: S.text }, T.confirmDiscardPromptBody),
+        yes: T.confirmDiscardPromptYes,
+        run: () => {
+          setPromptDraft(null)
+          clearNotice("prompt")
+        },
       })
     }
 
@@ -2309,16 +3316,12 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
     const guardDirtyRule = (onProceed) => {
       if (isRuleEditDirty(ruleEdit)) {
-        setConfirm({
-          scope: "rules",
+        openDialog({
           tone: "danger",
           title: T.confirmDiscardRuleTitle,
-          body: T.confirmDiscardRuleBody,
+          body: h("p", { style: S.text }, T.confirmDiscardRuleBody),
           yes: T.confirmDiscardYes,
-          run: () => {
-            setConfirm(null)
-            onProceed()
-          },
+          run: () => { onProceed() },
         })
         return
       }
@@ -2327,7 +3330,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
     const doNewRule = () => {
       clearNotice("rules")
-      setConfirm(null)
+      setDialog(null)
       const empty = { isNew: true, id: "", name: "", target: RULE_TARGETS[0], text: "" }
       setRuleEdit({ ...empty, baseline: empty })
     }
@@ -2337,7 +3340,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     }
 
     const doEditRule = (id) => {
-      setConfirm(null)
+      setDialog(null)
       void run("rules", async () => {
         const payload = await get(`/rules/read?id=${encodeURIComponent(id)}`)
         if (!mounted.current) return
@@ -2365,15 +3368,19 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       void run("rules", async () => {
         const payload = await post("/rules/save", { id: edit.id, name: edit.name.trim() || edit.id, target: edit.target, text: edit.text })
         const data = payload.data ?? {}
-        const target = String(data.target ?? edit.target)
-        let notice = { tone: "ok", title: T.ruleSaved }
-        if (data.landingMoved) notice = { tone: "ok", title: T.ruleSavedMoved(target) }
-        else if (data.landingSynced) notice = { tone: "ok", title: T.ruleSavedSynced(target) }
-        else if (data.landingStale) notice = { tone: "warn", title: T.ruleSavedStale(target) }
-        else if (f.activeRule !== edit.id) notice = { tone: "ok", title: T.ruleSavedInactive, next: T.ruleSavedInactiveNext }
+        const saved = ruleSaveNotice(data, f.activeRule, edit)
         if (mounted.current) {
           setRuleEdit(null)
-          notify("rules", notice)
+          setSelectedRuleId(edit.id)
+          setRuleBody({ id: edit.id, status: "ok", text: edit.text })
+          notify("rules", {
+            tone: saved.tone,
+            title: saved.title,
+            next: saved.next,
+            // 保存与激活是两步：保存只存下来，要生效请再按一次「现在激活」。
+            action: saved.activateRule === null ? undefined : "activateNow",
+            actionRule: saved.activateRule ?? undefined,
+          })
         }
       }, true)
     }
@@ -2383,16 +3390,12 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       const edit = ruleEdit
       const idTaken = edit.isNew && f.rules.some(rule => rule.id === edit.id)
       if (idTaken) {
-        setConfirm({
-          scope: "rules",
+        openDialog({
           tone: "danger",
           title: T.confirmOverwriteRuleTitle(edit.id),
-          body: T.confirmOverwriteRuleBody,
+          body: h("p", { style: S.text }, T.confirmOverwriteRuleBody),
           yes: T.confirmOverwriteRuleYes,
-          run: () => {
-            setConfirm(null)
-            doSaveRule(edit)
-          },
+          run: () => { doSaveRule(edit) },
         })
         return
       }
@@ -2402,10 +3405,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const askActivate = (rule) => {
       const label = rule.name || rule.id
       const other = f.activeRule !== null && f.activeRule !== rule.id ? ruleLabel(f.activeRule) : null
-      setConfirm({
-        scope: "rules",
+      openDialog({
         title: T.confirmActivateTitle(label),
-        body: T.confirmActivateBody(rule.target, formatBytes(rule.bytes)),
+        body: h("p", { style: S.text }, T.confirmActivateBody(rule.target, formatBytes(rule.bytes))),
         foot: other === null ? null : T.confirmActivateSwap(other),
         yes: T.confirmActivateYes,
         run: () => run("rules", async () => {
@@ -2422,10 +3424,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
     const askDeactivate = (rule) => {
       const label = rule.name || rule.id
-      setConfirm({
-        scope: "rules",
+      openDialog({
         title: T.confirmDeactivateTitle(label),
-        body: T.confirmDeactivateBody(rule.target),
+        body: h("p", { style: S.text }, T.confirmDeactivateBody(rule.target)),
         yes: T.confirmDeactivateYes,
         run: () => run("rules", async () => {
           const payload = await post("/rules/activate", { id: "" })
@@ -2443,27 +3444,26 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const askDelete = (rule) => {
       const label = rule.name || rule.id
       const active = rule.id === f.activeRule
-      setConfirm({
-        scope: "rules",
+      openDialog({
         tone: "danger",
         title: T.confirmDeleteTitle(label),
-        body: active ? T.confirmDeleteActiveBody(rule.target) : T.confirmDeleteBody,
+        body: h("p", { style: S.text }, active ? T.confirmDeleteActiveBody(rule.target) : T.confirmDeleteBody),
         yes: T.confirmDeleteYes,
         run: () => run("rules", async () => {
           await post("/rules/delete", { id: rule.id })
           if (!mounted.current) return
           setRuleEdit(prev => (prev !== null && prev.id === rule.id ? null : prev))
+          setSelectedRuleId(prev => (prev === rule.id ? null : prev))
           notify("rules", { tone: "ok", title: T.doneDeleted(label) })
         }, true),
       })
     }
 
     const askRecoverRules = (scope = "next") => {
-      setConfirm({
-        scope,
+      openDialog({
         tone: "danger",
         title: T.confirmRecoverRulesTitle,
-        body: T.confirmRecoverRulesBody,
+        body: h("p", { style: S.text }, T.confirmRecoverRulesBody),
         yes: T.confirmRecoverRulesYes,
         run: () => run(scope, async () => {
           const payload = await post("/rules/recover-corrupt", {})
@@ -2478,13 +3478,178 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       })
     }
 
+    // ---- 规则详情 ----
+
+    /** 详情正文按需读取。失败就停在失败态，可以重试，不拿空正文冒充。 */
+    const loadRuleBody = (id) => {
+      setRuleBody({ id, status: "loading", text: "" })
+      void (async () => {
+        try {
+          const payload = await get(`/rules/read?id=${encodeURIComponent(id)}`)
+          if (!mounted.current) return
+          setRuleBody(prev => (prev.id === id
+            ? { id, status: "ok", text: typeof payload.data?.text === "string" ? payload.data.text : "" }
+            : prev))
+        } catch {
+          if (!mounted.current) return
+          setRuleBody(prev => (prev.id === id ? { id, status: "failed", text: "" } : prev))
+        }
+      })()
+    }
+
+    const openRule = (id) => {
+      setSelectedRuleId(id)
+      setRuleEdit(null)
+      clearNotice("rules")
+      loadRuleBody(id)
+    }
+
+    // ---- 词库 ----
+
+    const wordsLocked = aliasStore.state.phase !== "ready" || aliasStore.state.stale || aliasStore.state.saving
+
+    const openWordEditor = (index = null) => {
+      if (wordsLocked) return
+      const entries = aliasStore.state.entries
+      const existing = index === null ? null : entries[index] ?? null
+      if (index !== null && existing === null) return
+      setWordSaveError(null)
+      setWordEditor({
+        phase: "edit",
+        originalFrom: existing?.from ?? null,
+        from: existing?.from ?? "",
+        to: existing?.to ?? "",
+        baselineFrom: existing?.from ?? "",
+        baselineTo: existing?.to ?? "",
+        touched: false,
+      })
+    }
+
+    const setWordField = (key, value) => {
+      setWordEditor(prev => (prev === null ? prev : { ...prev, [key]: value, touched: true }))
+    }
+
+    const backToWordEdit = () => {
+      setWordEditor(prev => (prev === null ? prev : { ...prev, phase: "edit" }))
+    }
+
+    /** 关闭编辑器：有未保存输入先确认；确认前输入一直留着。 */
+    const requestCloseWordEditor = () => {
+      const editor = wordEditor
+      if (editor === null || wordSaving) return
+      if (editor.phase !== "edit") {
+        backToWordEdit()
+        return
+      }
+      if (editor.from !== editor.baselineFrom || editor.to !== editor.baselineTo) {
+        setWordEditor({ ...editor, phase: "discard" })
+        return
+      }
+      setWordEditor(null)
+      setWordSaveError(null)
+    }
+
+    const saveWordChange = async (change, successTitle) => {
+      setWordSaving(true)
+      setWordSaveError(null)
+      const result = await aliasStore.commit(change)
+      if (!mounted.current) return
+      setWordSaving(false)
+      if (!result.ok) {
+        if (result.unknown) {
+          // 超时/断网不等于后端没写：不宣布「未生效」，草稿留着，先重新读取核对。
+          setWordSaveError({ tone: "warn", title: T.wordSaveUnknownTitle, next: T.wordSaveUnknownNext })
+          void aliasStore.read()
+        } else {
+          setWordSaveError({ tone: "error", title: T.wordSaveFailedTitle, next: T.wordSaveFailedNext })
+        }
+        setWordEditor(prev => (prev === null ? prev : { ...prev, phase: "edit" }))
+        return
+      }
+      setWordEditor(null)
+      setWordSaveError(null)
+      // 成功后列表以写接口返回的数据为准（后端做了规范化），另一处挂载点随共享 store 同步。
+      notify("words", { tone: "ok", sticky: true, title: successTitle, next: T.wordSavedNext })
+    }
+
+    const requestWordSave = () => {
+      const editor = wordEditor
+      if (editor === null || wordsLocked || wordSaving) return
+      const errors = wordEntryErrors(editor.from, editor.to, {
+        originalFrom: editor.originalFrom,
+        entries: aliasStore.state.entries,
+        maxEntries: aliasStore.state.limits.maxEntries,
+        maxTerm: aliasStore.state.limits.maxTerm,
+      })
+      if (errors.from !== "" || errors.to !== "" || errors.limit !== "") {
+        setWordEditor({ ...editor, touched: true })
+        return
+      }
+      const entry = { from: editor.from.trim(), to: editor.to.trim() }
+      const change = { type: "save", originalFrom: editor.originalFrom, entry }
+      const kind = aliasChangeKind(aliasStore.state.entries, change)
+      if (kind !== null) {
+        // 新增撞原词 → 覆盖确认；编辑改名撞原词 → 合并确认。取消就回到编辑态，输入保留。
+        setWordEditor({ ...editor, phase: kind, touched: true })
+        return
+      }
+      void saveWordChange(change, T.wordSaved)
+    }
+
+    const confirmWordOverwrite = () => {
+      const editor = wordEditor
+      if (editor === null) return
+      const entry = { from: editor.from.trim(), to: editor.to.trim() }
+      const merged = editor.originalFrom !== null && editor.originalFrom !== entry.from
+      setWordEditor({ ...editor, phase: "edit" })
+      void saveWordChange({ type: "save", originalFrom: editor.originalFrom, entry }, merged ? T.wordSavedMerged : T.wordSaved)
+    }
+
+    const askDeleteWord = (index) => {
+      const entry = aliasStore.state.entries[index]
+      if (entry === undefined || wordsLocked) return
+      openDialog({
+        tone: "danger",
+        title: T.wordDeleteTitle(entry.from),
+        body: h("div", { style: S.wordEditorFields },
+          h(Pair, { entry }),
+          h("p", { style: S.small }, T.wordDeleteBody)),
+        yes: T.wordDeleteYes,
+        run: () => { void saveWordChange({ type: "delete", from: entry.from }, T.wordDeleted) },
+      })
+    }
+
+    const retryAliasRead = () => {
+      void aliasStore.read().then(() => {
+        if (!mounted.current) return
+        if (aliasStore.state.phase === "ready" && !aliasStore.state.stale) {
+          notify("words", { tone: "ok", title: T.wordsReadOk })
+        }
+      })
+    }
+
+    const returnToChat = () => {
+      wordsFromChat = false
+      if (closeSettings !== null) closeSettings()
+    }
+
     // ---- 渲染 ----
 
-    const confirmFor = (scope) => (confirm !== null && confirm.scope === scope
-      ? h(ConfirmStrip, { key: confirm.title, confirm, busy, onAccept: accept, onCancel: () => { setConfirm(null) } })
-      : null)
     const noticeFor = (scope) => (notices[scope]
-      ? h(Notice, { notice: notices[scope], onAction: runAction, onDismiss: () => { clearNotice(scope) } })
+      ? h(Notice, {
+        notice: notices[scope],
+        onAction: (action) => {
+          // 「现在激活」直接把刚保存的那条规则的激活确认弹出来：保存与激活是两步。
+          if (action === "activateNow") {
+            const id = notices[scope]?.actionRule
+            const rule = f.rules.find(item => item.id === id)
+            if (rule !== undefined) askActivate(rule)
+            return
+          }
+          runAction(action)
+        },
+        onDismiss: () => { clearNotice(scope) },
+      })
       : null)
 
     const restartView = restart === null
@@ -2510,11 +3675,17 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       node?.focus?.()
     }
 
-    const tabLabel = (key) => (key === "overview" ? T.tabOverview : key === "patches" ? T.tabPatches : T.tabContext)
+    const tabLabel = (key) => (key === "overview" ? T.tabOverview : key === "patches" ? T.tabPatches : key === "prompt" ? T.tabPrompt : key === "rules" ? T.tabRules : T.tabWords)
     const tabTone = (key) => {
-      if (key !== "patches" || status === null) return null
-      if (f.blocked.length > 0 || f.broken) return "error"
-      if (f.pendingFiles > 0) return "accent"
+      if (status === null) return null
+      if (key === "patches") {
+        if (f.blocked.length > 0 || f.broken) return "error"
+        if (f.pendingFiles > 0) return "accent"
+        return null
+      }
+      if (key === "prompt") return promptError === null ? null : "error"
+      if (key === "rules") return f.rulesIndex === "corrupt" ? "error" : null
+      if (key === "words") return aliasStore.state.phase !== "ready" || aliasStore.state.stale ? "error" : null
       return null
     }
 
@@ -2527,11 +3698,11 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       body = h(OverviewPage, {
         f, status, override, busy, enabledPending, restart, restartView,
         step: nextStep(f, loadError),
+        words: aliasStore.state,
+        guideOpen,
+        onToggleGuide: () => { setGuideOpen(prev => !prev) },
         nextNotice: noticeFor("next"),
         overviewNotice: noticeFor("overview"),
-        // 「下一步」卡片上的按钮会开确认条（例如规则清单恢复）。少了这一行，
-        // 按钮点下去只把 confirm 写进 state，没有组件消费它，界面上什么都不会发生。
-        confirmView: confirmFor("next"),
         onRun: runAction,
         onGo: goTab,
         onToggleEnabled: (next) => { void toggleEnabled(next) },
@@ -2539,8 +3710,6 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     } else if (tab === "patches") {
       body = h(PatchesPage, {
         f, patchInfo, patchError, busy, toggles, restartView,
-        confirmOpen: confirm !== null && confirm.scope === "patches",
-        confirmView: confirmFor("patches"),
         noticeView: noticeFor("patches"),
         onToggle: (id, next) => { void togglePatch(id, next) },
         onApply: askApply,
@@ -2548,32 +3717,38 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         onRun: runAction,
         onCopy: (text) => { void copy(text, "patches") },
       })
-    } else {
-      body = h(ContextPage, {
+    } else if (tab === "prompt") {
+      body = h("div", { style: S.panel },
         restartView,
-        mode: {
+        h(ModeBlock, {
           mode: f.mode,
-          pendingMode: confirm !== null && confirm.scope === "mode" ? confirm.pick : null,
+          pendingMode: dialog !== null && dialog.pick !== undefined ? dialog.pick : null,
           onPick: pickMode,
-          confirmView: confirmFor("mode"),
           noticeView: noticeFor("mode"),
-        },
-        prompt: {
-          override, draft, setDraft, busy,
+        }),
+        h(PromptBlock, {
+          override, promptError, draft, setDraft: setPromptDraft, busy,
           onSave: savePrompt,
           onReset: askResetPrompt,
+          onDiscard: askDiscardPrompt,
           onCopy: (text) => { void copy(text, "prompt") },
-          confirmView: confirmFor("prompt"),
+          onRetry: () => { void load() },
           noticeView: noticeFor("prompt"),
-        },
-        rules: {
+        }))
+    } else if (tab === "rules") {
+      body = h("div", { style: S.panel },
+        restartView,
+        h(RulesBlock, {
           rules: f.rules,
           activeRule: f.activeRule,
           rulesIndex: f.rulesIndex,
           rulesIndexPath: f.rulesIndexPath,
+          selectedId: selectedRuleId,
+          body: ruleBody,
           edit: ruleEdit,
           busy,
           onNew: newRule,
+          onOpen: openRule,
           onEdit: editRule,
           onEditChange: setRuleEdit,
           onSave: saveRule,
@@ -2582,11 +3757,74 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           onDeactivate: askDeactivate,
           onDelete: askDelete,
           onRecover: () => { askRecoverRules("rules") },
-          confirmView: confirmFor("rules"),
+          onRetryBody: () => { if (ruleBody.id !== null) loadRuleBody(ruleBody.id) },
           noticeView: noticeFor("rules"),
-        },
+        }))
+    } else {
+      body = h(WordsPage, {
+        store: aliasStore.state,
+        query: wordsQuery,
+        setQuery: setWordsQuery,
+        previewText: wordsPreview,
+        setPreviewText: setWordsPreview,
+        restartView,
+        noticeView: noticeFor("words"),
+        onAdd: () => { openWordEditor(null) },
+        onEdit: (index) => { openWordEditor(index) },
+        onDelete: askDeleteWord,
+        onRetryRead: retryAliasRead,
+        onReturnChat: returnToChat,
+        canReturn: wordsFromChat && closeSettings !== null,
       })
     }
+
+    const dialogView = h(Dialog, {
+      open: dialog !== null,
+      title: dialog?.title ?? "",
+      tone: dialog?.tone === "danger" ? "error" : "accent",
+      body: dialog?.body ?? null,
+      foot: [
+        dialog?.foot ? h("p", { key: "note", style: S.dialogNote }, dialog.foot) : null,
+        h(Button, { key: "cancel", kind: "quiet", onClick: closeDialog }, T.cancel),
+        dialog?.yes === undefined
+          ? null
+          : h(Button, {
+            key: "yes",
+            kind: dialog.tone === "danger" ? "danger" : "primary",
+            autofocus: true,
+            off: busy,
+            reason: T.whyBusy,
+            onClick: accept,
+          }, busy ? T.working : dialog.yes),
+      ],
+      onClose: closeDialog,
+    })
+
+    const editorSpec = wordEditor === null
+      ? null
+      : WordEditor({
+        editor: wordEditor,
+        entries: aliasStore.state.entries,
+        limits: aliasStore.state.limits,
+        saving: wordSaving,
+        error: wordSaveError,
+        onField: setWordField,
+        onSave: requestWordSave,
+        onCancel: requestCloseWordEditor,
+        onBack: backToWordEdit,
+        onConfirmOverwrite: confirmWordOverwrite,
+        onConfirmDiscard: () => { setWordEditor(null); setWordSaveError(null) },
+      })
+
+    // 弹窗常驻挂载、只切 open：关闭时焦点才能回到触发它的按钮，不会因卸载丢失。
+    const wordDialogView = h(Dialog, {
+      open: editorSpec !== null,
+      title: editorSpec?.title ?? "",
+      tone: editorSpec?.tone === "error" ? "error" : "accent",
+      body: editorSpec?.body ?? null,
+      foot: editorSpec?.foot ?? [],
+      onClose: requestCloseWordEditor,
+    })
 
     return h("div", { className: "bkl-root", style: S.root },
       h("header", { style: S.header },
@@ -2596,7 +3834,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         h("div", { style: S.headAside },
           loadedAt > 0 ? h("span", { style: S.stamp, "aria-live": "off" }, T.refreshedAt(formatAgo(loadedAt))) : null,
           h(Button, { size: "small", off: busy, reason: T.whyBusy, onClick: () => { void load() } }, T.refresh))),
-      h("div", { role: "tablist", "aria-label": T.tabsLabel, style: S.tablist },
+      h("div", { id: "bkl-tablist", role: "tablist", "aria-label": T.tabsLabel, style: S.tablist },
         TAB_KEYS.map((key, index) => {
           const selected = tab === key
           const tone = tabTone(key)
@@ -2614,7 +3852,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
             onKeyDown: (event) => { onTabKey(event, index) },
           }, tabLabel(key), tone === null ? null : h(Dot, { tone }))
         })),
-      h("div", { id: `bkl-panel-${tab}`, role: "tabpanel", "aria-labelledby": `bkl-tab-${tab}`, style: S.panel }, body))
+      h("div", { id: `bkl-panel-${tab}`, role: "tabpanel", "aria-labelledby": `bkl-tab-${tab}`, style: S.panel }, body),
+      dialogView,
+      wordDialogView)
   }
 
   // ---- 目标词表：输入框上方的常驻行 -----------------------------------------
@@ -2805,9 +4045,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   }
 
   function AliasRow() {
-    const [entries, setEntries] = useState([])
-    const [lastHits, setLastHits] = useState(0)
-    const [phase, setPhase] = useState("loading")
+    // 词库状态不在这里另存一份：与设置页共用 aliasStore，两处才不会拿旧列表互相覆盖。
+    const [, bumpDock] = useState(0)
     const [tier, setTier] = useState("recommended")
     const [tierBusy, setTierBusy] = useState(false)
     const [tierFailed, setTierFailed] = useState(false)
@@ -2817,29 +4056,15 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const [toInput, setToInput] = useState("")
     const [confirmFrom, setConfirmFrom] = useState(null)
     const [deletingIndex, setDeletingIndex] = useState(null)
-    const [saving, setSaving] = useState(false)
-    const [saveFailed, setSaveFailed] = useState(false)
+    const [writeState, setWriteState] = useState(null)
+    const [navHint, setNavHint] = useState(false)
     const rootRef = useRef(null)
     const aliveRef = useRef(true)
 
     const load = useCallback(async () => {
-      try {
-        const [aliasRes, tierRes] = await Promise.all([
-          get("/alias"),
-          get("/tier").catch(() => null),
-        ])
-        if (!aliveRef.current) return
-        const data = aliasRes?.data ?? {}
-        setEntries(Array.isArray(data.entries) ? data.entries : [])
-        setLastHits(Number(data.lastHits) || 0)
-        setPhase("ready")
-        if (typeof tierRes?.data?.tier === "string") {
-          setTier(tierRes.data.tier)
-        }
-      } catch {
-        if (!aliveRef.current) return
-        setPhase("failed")
-      }
+      const tierRes = await get("/tier").catch(() => null)
+      if (!aliveRef.current) return
+      if (typeof tierRes?.data?.tier === "string") setTier(tierRes.data.tier)
     }, [])
 
     const switchTier = async (next) => {
@@ -2880,12 +4105,31 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     useEffect(() => {
       aliveRef.current = true
       void load()
+      void aliasStore.read()
       return () => { aliveRef.current = false }
     }, [load])
 
+    useEffect(() => aliasStore.subscribe(() => { if (aliveRef.current) bumpDock(value => value + 1) }), [])
+
     useEffect(() => {
-      if (open) void load()
+      if (open) {
+        void load()
+        void aliasStore.read()
+      }
     }, [open, load])
+
+    // 快速添加的输入也是草稿：页面卸载前拦一下。
+    useEffect(() => {
+      if (typeof window === "undefined" || typeof window.addEventListener !== "function") return undefined
+      const onBeforeUnload = (event) => {
+        if (fromInput !== "" || toInput !== "") {
+          event.preventDefault()
+          event.returnValue = ""
+        }
+      }
+      window.addEventListener("beforeunload", onBeforeUnload)
+      return () => { window.removeEventListener("beforeunload", onBeforeUnload) }
+    }, [fromInput, toInput])
 
     useEffect(() => {
       if (!open) return
@@ -2913,49 +4157,64 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       }
     }, [open])
 
-    const commit = async (next, onSuccess) => {
-      setSaving(true)
-      setSaveFailed(false)
-      try {
-        const payload = await put("/alias", { entries: next })
-        const data = payload?.data ?? {}
-        setEntries(Array.isArray(data.entries) ? data.entries : next)
-        if (typeof onSuccess === "function") onSuccess()
-      } catch {
-        setSaveFailed(true)
-      } finally {
-        setSaving(false)
+    const commitChange = async (change, onSuccess) => {
+      setWriteState(null)
+      // 写入走共享 store：按操作提交、整表写入、串行，两个挂载点共用一份最新列表。
+      const result = await aliasStore.commit(change)
+      if (!aliveRef.current) return
+      if (!result.ok) {
+        if (result.unknown) {
+          // 超时/断网不等于后端没写：不宣布「未生效」，先重新读取核对。
+          setWriteState({ tone: "warn", title: T.wordSaveUnknownTitle, next: T.wordSaveUnknownNext })
+          void aliasStore.read()
+        } else {
+          setWriteState({ tone: "error", title: T.aliasSaveFailed, next: T.wordSaveFailedNext })
+        }
+        return
       }
+      setWriteState({ tone: "ok", title: T.wordSaved, next: T.wordSavedNext })
+      if (typeof onSuccess === "function") onSuccess()
+      // 通知设置页重新拉状态：它那份概览与词库摘要需要跟着变。
+      notifyStateChanged()
     }
 
     const from = fromInput.trim()
     const to = toInput.trim()
-    const canAdd = from !== "" && to !== "" && !saving
+    const entries = aliasStore.state.entries
+    const saving = aliasStore.state.saving
+    const inputErrors = wordEntryErrors(fromInput, toInput, {
+      originalFrom: null,
+      entries,
+      maxEntries: aliasStore.state.limits.maxEntries,
+      maxTerm: aliasStore.state.limits.maxTerm,
+    })
+    const canAdd = from !== "" && to !== "" && inputErrors.from === "" && inputErrors.to === "" && inputErrors.limit === "" && !saving
 
     const add = () => {
       if (!canAdd) return
-      const exists = entries.some((entry) => entry.from === from)
-      if (exists && confirmFrom !== from) {
+      const entry = { from, to }
+      // 新增撞原词要先确认覆盖；确认前不写入，输入保留。
+      if (aliasChangeKind(aliasStore.state.entries, { type: "save", originalFrom: null, entry }) === "overwrite" && confirmFrom !== from) {
         setConfirmFrom(from)
         return
       }
       setConfirmFrom(null)
-      const next = exists
-        ? entries.map((entry) => (entry.from === from ? { from, to } : entry))
-        : entries.concat([{ from, to }])
-      void commit(next, () => {
+      void commitChange({ type: "save", originalFrom: null, entry }, () => {
         setFromInput("")
         setToInput("")
+        setConfirmFrom(null)
       })
     }
 
     const removeAt = (index) => {
+      const entry = entries[index]
+      if (entry === undefined) return
       if (deletingIndex !== index) {
         setDeletingIndex(index)
         return
       }
       setDeletingIndex(null)
-      void commit(entries.filter((_, i) => i !== index))
+      void commitChange({ type: "delete", from: entry.from })
     }
 
     const onKeyDown = (event) => {
@@ -2966,13 +4225,14 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     }
 
     const statusText = () => {
-      if (phase === "loading") return T.aliasLoading
+      const state = aliasStore.state
+      if (state.phase === "loading") return T.aliasLoading
       // 读不到和「没有条目」是两件事：前者是请求没通，后者是真的没配。
       // 混成一个文案会让人以为词表空了，实际是接口没响应。
-      if (phase === "failed") return T.aliasStateFailed
-      if (entries.length === 0) return T.aliasStateEmpty
-      if (lastHits === 0) return T.aliasStateMiss
-      return T.aliasStateHit(entries.length)
+      if (state.phase === "failed" || state.stale) return T.aliasStateFailed
+      if (state.entries.length === 0) return T.aliasStateEmpty
+      if (state.lastHits === 0) return T.aliasStateMiss
+      return T.aliasStateHit(state.entries.length)
     }
 
     return h("div", { ref: rootRef, style: ALIAS.root },
@@ -3076,13 +4336,35 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                 disabled: canAdd ? undefined : true,
                 onClick: add,
               }, T.aliasAdd)),
-            saveFailed ? h("p", { style: ALIAS.fail }, T.aliasSaveFailed) : null,
-            h("p", { style: ALIAS.foot }, T.aliasFoot))
+            writeState === null
+              ? null
+              : h("p", { style: writeState.tone === "ok" ? ALIAS.foot : ALIAS.fail }, `${String(writeState.title)}${T.sep}${String(writeState.next)}`),
+            canAdd || (from === "" && to === "")
+              ? null
+              : h("p", { style: ALIAS.fail }, inputErrors.from || inputErrors.to || inputErrors.limit),
+            navHint ? h("p", { style: ALIAS.foot }, T.wordsNavHint) : null,
+            h("p", { style: ALIAS.foot }, T.aliasFoot),
+            h("div", { style: ALIAS.form },
+              h("button", {
+                type: "button",
+                style: ALIAS.add,
+                onClick: () => {
+                  // 进设置分区的词库页；分区没挂载就只给指引，不假装已经跳过去。
+                  if (openWordsFromDock()) {
+                    setOpen(false)
+                    setNavHint(false)
+                  } else {
+                    setNavHint(true)
+                  }
+                },
+              }, T.wordsManage)))
         : null)
   }
 
   function apply(ctx) {
     refreshText()
+    // 浮窗要用宿主 slots 的能力（打开设置分区），在 apply 时收好入口。
+    hostCtx = ctx
     ctx.slots.inject("settings.section", () => ctx.slots.register({
       name: "settings.section",
       id: SECTION_ID,
@@ -3105,8 +4387,21 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   exports.name = name
   exports.inject = inject
   exports.apply = apply
-  // 草稿脏判定抽出来导出，测试直接测这个纯函数。挂在组件内部时只能靠桩 React
-  // 状态去逼出脏草稿，桩一改就把断言也改歪了。
+  // 这些纯函数/组件导出是为了让回归测试直接测真实实现：它们要么是不可逆操作前的
+  // 判定（草稿脏判定、词条校验、覆盖/合并判定、保存后的草稿回收），要么是必须与
+  // host/masks.js 语义一致的本地预览，要么是「读取失败禁止覆盖」这类渲染约束。
   exports.isRuleEditDirty = isRuleEditDirty
+  exports.maskPreview = maskPreview
+  exports.normalizeAliasEntries = normalizeAliasEntries
+  exports.aliasNextEntries = aliasNextEntries
+  exports.aliasChangeKind = aliasChangeKind
+  exports.wordEntryErrors = wordEntryErrors
+  exports.draftAfterSave = draftAfterSave
+  exports.ruleSaveNotice = ruleSaveNotice
+  exports.createAliasStore = createAliasStore
+  exports.notifyStateChanged = notifyStateChanged
+  exports.openWordsFromDock = openWordsFromDock
+  exports.PromptBlock = PromptBlock
+  exports.WordEditor = WordEditor
   return module.exports
 }})

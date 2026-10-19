@@ -79,3 +79,5 @@ breaklimit --help
 未提供 `webServer` 服务的宿主组合不会挂载这些路由，状态中显示 `http.mounted: false`。Web 设置页的可用性取决于宿主加载的客户端与服务组合。
 
 目标词表存在 `$DSH_HOME/breaklimit/masks.json`：最多 100 条，每条 `from` 与 `to` 各不超过 64 字符，`from` 等于 `to` 的条目被丢弃。替换只在请求交付给模型之前作用于用户消息，精确字面匹配、长词优先；词表为空时不做任何替换。改完词表需要新开会话才生效。
+
+`GET /breaklimit/alias` 读取词表文件失败时仍返回 HTTP 200、`code: "ok"`，告警放在 `message` 里（此时 `data.entries` 不可信，可能是空表）；调用方必须识别 `message` 非空的读取告警，不能只凭状态码判断读取正常。`PUT /breaklimit/alias` 是整表覆盖，不是单条增删接口。
