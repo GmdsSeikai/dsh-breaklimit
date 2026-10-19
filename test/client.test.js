@@ -619,3 +619,57 @@ test('词库读取告警随 200 返回时按读取失败处理，不当成空词
   const refused = await store.commit({ type: 'save', originalFrom: null, entry: { from: 'a', to: 'b' } })
   assert.equal(refused.refused, true)
 })
+
+// Dialog 的焦点往返：开口朝 DOM 节点存触发元素，关的时候还回去。
+// 这条用例只证明组件逻辑；真实浏览器里 <dialog> 的焦点行为仍要另行验收。
+function dialogHarness(activeElement) {
+  let focused = null
+  const dialogEl = {
+    open: false,
+    showModal() { this.open = true },
+    close() { this.open = false },
+    querySelector() { return null },
+  }
+  const effects = []
+  const react = {
+    createElement: (type, props, ...children) => {
+      if (type === 'dialog' && props !== undefined && props.ref !== undefined) props.ref.current = dialogEl
+      return { type, props: props ?? {}, children }
+    },
+    useState: initial => [initial, () => {}],
+    // 真实 React 在挂载后跑 effect，这时 ref 已经赋值。桩里先收集，渲染后再跑。
+    useEffect(fn) { effects.push(fn) },
+    useCallback: fn => fn,
+    useRef: current => ({ current }),
+  }
+  const { exported } = loadClient(
+    { document: { head: null, documentElement: { lang: 'en' }, getElementById() { return null }, activeElement } },
+    react,
+  )
+  const spec = { idBase: 'x', title: 't', tone: 'accent', body: null, foot: [], onClose() {} }
+  const flush = () => { for (const fn of effects.splice(0)) fn() }
+  const run = () => {
+    exported.Dialog({ ...spec, open: true })
+    flush()
+    exported.Dialog({ ...spec, open: false })
+    flush()
+  }
+  return { run, focused: () => focused, dialogEl }
+}
+
+test('Dialog 关闭时把焦点还给打开它的元素', () => {
+  let focused = null
+  const trigger = { tagName: 'BUTTON', isConnected: true, focus() { focused = trigger } }
+  const harness = dialogHarness(trigger)
+  harness.run()
+  assert.equal(focused, trigger)
+  assert.equal(harness.dialogEl.open, false)
+})
+
+test('Dialog 不把焦点还给 body，也不在无可还对象时乱调 focus', () => {
+  let bodyFocused = false
+  const body = { tagName: 'BODY', isConnected: true, focus() { bodyFocused = true } }
+  const harness = dialogHarness(body)
+  harness.run()
+  assert.equal(bodyFocused, false)
+})

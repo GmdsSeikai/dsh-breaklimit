@@ -2043,22 +2043,33 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   // 不可点的按钮继续用 aria-disabled，行为与页面其他按钮一致。
   const FOCUSABLE = "button, [href], input, select, textarea, [tabindex]:not([tabindex=\"-1\"])"
 
-  function Dialog({ open, title, tone, body, foot, onClose }) {
+  // 两个 Dialog 常驻挂载、只切 open，所以标题与正文的 id 必须分开：
+  // aria-labelledby 按 id 在整篇文档里找，共用 id 时后一个弹窗会读到前一个的标题。
+  function Dialog({ open, idBase = "bkl-dialog", title, tone, body, foot, onClose }) {
+    const titleId = `${idBase}-title`
+    const bodyId = `${idBase}-body`
     const nodeRef = useRef(null)
-    const triggerRef = useRef(null)
     useEffect(() => {
       const element = nodeRef.current
       if (element === null || typeof element.showModal !== "function") return undefined
       if (open) {
-        triggerRef.current = typeof document !== "undefined" && document.activeElement ? document.activeElement : null
+        // 触发元素记在 DOM 节点上而不是组件 ref 里：重渲染换掉实例时，节点上的值还在。
+        // body 不记——把焦点还给页面根等于没还，关闭后仍停在文档开头。
+        const previous = typeof document !== "undefined" ? document.activeElement : null
+        if (previous !== null && previous !== undefined && previous !== element
+          && typeof previous.focus === "function" && typeof previous.tagName === "string"
+          && previous.tagName !== "BODY") {
+          element.__bklReturnFocus = previous
+        }
         if (!element.open) element.showModal()
         const target = (typeof element.querySelector === "function" ? element.querySelector("[data-bkl-autofocus]") : null)
           ?? (typeof element.querySelector === "function" ? element.querySelector(FOCUSABLE) : null)
         target?.focus?.()
       } else if (element.open) {
         element.close()
-        const back = triggerRef.current
-        if (back !== null && typeof back.focus === "function" && back.isConnected !== false) back.focus()
+        const back = element.__bklReturnFocus
+        element.__bklReturnFocus = null
+        if (back !== null && back !== undefined && typeof back.focus === "function" && back.isConnected !== false) back.focus()
       }
       return undefined
     }, [open])
@@ -2078,16 +2089,16 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       ref: nodeRef,
       className: "bkl-dialog",
       "aria-modal": "true",
-      "aria-labelledby": "bkl-dialog-title",
-      "aria-describedby": "bkl-dialog-body",
+      "aria-labelledby": titleId,
+      "aria-describedby": bodyId,
       style: S.dialog,
     },
       h("div", { style: S.dialogInner },
         h("div", { style: S.dialogHead },
           h(Dot, { tone: tone ?? "accent" }),
-          h("h3", { id: "bkl-dialog-title", style: S.dialogTitle }, title),
+          h("h3", { id: titleId, style: S.dialogTitle }, title),
           h(Button, { kind: "quiet", size: "small", label: T.dismissShort, onClick: onClose }, T.dismissShort)),
-        h("div", { id: "bkl-dialog-body", style: S.dialogBody }, body),
+        h("div", { id: bodyId, style: S.dialogBody }, body),
         h("div", { style: S.dialogFoot }, foot)))
   }
 
@@ -3788,6 +3799,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
     const dialogView = h(Dialog, {
       open: dialog !== null,
+      idBase: "bkl-dialog",
       title: dialog?.title ?? "",
       tone: dialog?.tone === "danger" ? "error" : "accent",
       body: dialog?.body ?? null,
@@ -3827,6 +3839,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     // 弹窗常驻挂载、只切 open：关闭时焦点才能回到触发它的按钮，不会因卸载丢失。
     const wordDialogView = h(Dialog, {
       open: editorSpec !== null,
+      idBase: "bkl-word-dialog",
       title: editorSpec?.title ?? "",
       tone: editorSpec?.tone === "error" ? "error" : "accent",
       body: editorSpec?.body ?? null,
@@ -4411,5 +4424,6 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   exports.openWordsFromDock = openWordsFromDock
   exports.PromptBlock = PromptBlock
   exports.WordEditor = WordEditor
+  exports.Dialog = Dialog
   return module.exports
 }})
