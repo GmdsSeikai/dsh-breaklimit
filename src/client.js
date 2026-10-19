@@ -313,13 +313,13 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
       nextStep: "下一步",
       nsRulesCorruptTitle: "规则清单读不出来",
-      nsRulesCorruptBody: "规则清单文件无法读取或版本不符，插件已停止写入以保护原数据。已有的正文文件完好保留在 bodies/ 目录中。你可以备份原清单并重置为空清单重新开始。",
+      nsRulesCorruptBody: (path) => `规则清单文件（$DSH_HOME/${String(path)}）无法读取或版本不符，插件已停止写入以保护原数据。已有的正文文件完好保留在 $DSH_HOME/breaklimit/bodies/ 目录中。你可以备份原清单并重置为空清单重新开始。`,
       recoverRules: "备份并重置清单",
       confirmRecoverRulesTitle: "确认备份并重置规则清单？",
       confirmRecoverRulesBody: "会将当前的损坏清单复制备份到 dsh-breaklimit-backup 目录下，并初始化一份空的规则清单。之前的正文文件仍在 bodies/ 中，重新创建同名规则会覆盖它们。",
       confirmRecoverRulesYes: "备份并重置",
       doneRecoverRules: "规则清单已重置",
-      doneRecoverRulesNext: (path) => `原损坏清单已备份至 ${String(path)}。正文文件仍在 bodies/ 目录下。`,
+      doneRecoverRulesNext: (path) => `原损坏清单已备份至 $DSH_HOME/${String(path)}。正文文件仍在 $DSH_HOME/breaklimit/bodies/ 目录下。`,
       nsBrokenTitle: "上次的应用记录读不出来",
       nsBrokenBody: "为了不把宿主改乱，插件暂停了应用和回退。不要反复点按钮；按安装说明里「回退与卸载」一节处理 DSH 数据目录下的 breaklimit 文件夹，再回来点「重新检查」。",
       nsRootTitle: "先告诉插件宿主源码在哪",
@@ -430,7 +430,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       whyNothing: "没有需要写入的文件：选中的补丁都已就位。",
       whyNotApplied: "还没有应用记录，没有可回退的内容。",
       whyRulesCorrupt: "规则清单损坏，已暂停写入，请先备份并重置。",
-      rulesCorruptNotice: "规则清单读不出来，插件已停止写入以保护原数据。已有的正文文件完好保留在 bodies/ 目录中。",
+      rulesCorruptNotice: (path) => `规则清单读不出来（$DSH_HOME/${String(path)}），插件已停止写入以保护原数据。已有的正文文件完好保留在 $DSH_HOME/breaklimit/bodies/ 目录中。`,
       confirmDiscardRuleTitle: "当前有未保存的规则草稿",
       confirmDiscardRuleBody: "离开或切换后，未保存的规则改动将会丢失。确认放弃这些改动吗？",
       confirmDiscardYes: "放弃修改",
@@ -672,13 +672,13 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
       nextStep: "Next step",
       nsRulesCorruptTitle: "Rules index cannot be read",
-      nsRulesCorruptBody: "The rules index is unreadable or has an incompatible version. The plugin paused writes to protect existing data. Rule bodies remain safe in bodies/. You can back up the corrupt index and start fresh with an empty one.",
+      nsRulesCorruptBody: (path) => `The rules index ($DSH_HOME/${String(path)}) is unreadable or has an incompatible version. The plugin paused writes to protect existing data. Rule bodies remain safe in $DSH_HOME/breaklimit/bodies/. You can back up the corrupt index and start fresh with an empty one.`,
       recoverRules: "Back up and reset index",
       confirmRecoverRulesTitle: "Back up and reset rules index?",
       confirmRecoverRulesBody: "The corrupt index file will be copied to dsh-breaklimit-backup and an empty index will be initialized. Existing rule bodies stay in bodies/; creating rules with the same ID will overwrite them.",
       confirmRecoverRulesYes: "Back up and reset",
       doneRecoverRules: "Rules index reset",
-      doneRecoverRulesNext: (path) => `Corrupt index backed up to ${String(path)}. Rule bodies remain in bodies/.`,
+      doneRecoverRulesNext: (path) => `Corrupt index backed up to $DSH_HOME/${String(path)}. Rule bodies remain in $DSH_HOME/breaklimit/bodies/.`,
       nsBrokenTitle: "The last apply record cannot be read",
       nsBrokenBody: "To avoid damaging the host, apply and revert are paused. Do not keep retrying. Follow the Revert and uninstall section of the install guide for the breaklimit folder in your DSH data directory, then press Check again.",
       nsRootTitle: "Tell the plugin where the host source is",
@@ -789,7 +789,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       whyNothing: "Nothing to write: the chosen patches are already in place.",
       whyNotApplied: "There is no apply record, so there is nothing to revert.",
       whyRulesCorrupt: "Rules index is corrupt and writes are paused; back up and reset first.",
-      rulesCorruptNotice: "Rules index cannot be read; writes are paused to protect existing data. Rule bodies remain safe in bodies/.",
+      rulesCorruptNotice: (path) => `Rules index cannot be read ($DSH_HOME/${String(path)}); writes are paused to protect existing data. Rule bodies remain safe in $DSH_HOME/breaklimit/bodies/.`,
       confirmDiscardRuleTitle: "Unsaved rule draft",
       confirmDiscardRuleBody: "Unsaved changes to this rule will be lost if you switch or cancel. Discard these changes?",
       confirmDiscardYes: "Discard changes",
@@ -1205,7 +1205,11 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       rules: Array.isArray(status?.rules) ? status.rules : [],
       activeRule: typeof status?.activeRule === "string" ? status.activeRule : null,
       rulesIndex: status?.rulesIndex ?? "ok",
-      rulesIndexPath: status?.rulesIndexPath ?? "",
+      // 后端给的是相对 `$DSH_HOME` 的路径；拿不到时退回包里写死的默认位置，
+      // 免得提示里出现一个空路径。
+      rulesIndexPath: typeof status?.rulesIndexPath === "string" && status.rulesIndexPath !== ""
+        ? status.rulesIndexPath
+        : "breaklimit/rules.json",
       customPrompt: override?.userFileExists === true,
       restartPending: restart !== null,
     }
@@ -1217,7 +1221,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       return {
         tone: "error",
         title: T.nsRulesCorruptTitle,
-        body: T.nsRulesCorruptBody,
+        body: T.nsRulesCorruptBody(f.rulesIndexPath),
         primary: { label: T.recoverRules, action: "recoverRules" },
         secondary: { label: T.recheck, action: "refresh" },
       }
@@ -1884,7 +1888,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       saveWhy ? h("p", { id: "bkl-rule-save-why", style: S.small }, saveWhy) : null)
   }
 
-  function RulesBlock({ rules, activeRule, rulesIndex, edit, busy, onNew, onEdit, onEditChange, onSave, onCancelEdit, onActivate, onDeactivate, onDelete, onRecover, confirmView, noticeView }) {
+  function RulesBlock({ rules, activeRule, rulesIndex, rulesIndexPath, edit, busy, onNew, onEdit, onEditChange, onSave, onCancelEdit, onActivate, onDeactivate, onDelete, onRecover, confirmView, noticeView }) {
     const isCorrupt = rulesIndex === "corrupt"
     const newWhy = busy ? T.whyBusy : isCorrupt ? T.whyRulesCorrupt : null
     return h(Card, {
@@ -1902,7 +1906,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           notice: {
             tone: "error",
             title: T.nsRulesCorruptTitle,
-            next: T.rulesCorruptNotice,
+            next: T.rulesCorruptNotice(rulesIndexPath),
             action: "recoverRules",
           },
           onAction: onRecover,
@@ -2529,6 +2533,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           rules: f.rules,
           activeRule: f.activeRule,
           rulesIndex: f.rulesIndex,
+          rulesIndexPath: f.rulesIndexPath,
           edit: ruleEdit,
           busy,
           onNew: newRule,

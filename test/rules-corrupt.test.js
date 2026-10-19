@@ -149,10 +149,11 @@ test('HTTP 接口：损坏时写操作返回 409 index_corrupt，recover 路由�
   writeCorruptIndex(home, '{ corrupt json for http }')
   const handler = createHandler({ get() { return undefined } }, {}, { enabled: true, counters: {} })
 
-  // GET /rules/status 应该返回 rulesIndex = corrupt
+  // GET /rules/status 应该返回 rulesIndex = corrupt，且清单路径可定位
   const statusRes = await request(handler, 'GET', '/rules/status')
   assert.equal(statusRes.status, 200)
   assert.equal(statusRes.payload.data.rulesIndex, 'corrupt')
+  assert.equal(statusRes.payload.data.rulesIndexPath, 'breaklimit/rules.json')
 
   // POST /rules/save 应该返回 409 index_corrupt
   const saveRes = await request(handler, 'POST', '/rules/save', { id: 'sample', text: 'body', name: 'Sample' })
@@ -174,7 +175,11 @@ test('HTTP 接口：损坏时写操作返回 409 index_corrupt，recover 路由�
   assert.equal(recRes.status, 200)
   assert.equal(recRes.payload.code, 'recovered')
   assert.equal(recRes.payload.data.rulesIndex, 'ok')
-  assert.ok(recRes.payload.data.backupPath.startsWith('…/')) // 脱敏路径
+  // 备份路径必须能直接拿去磁盘上找：保留 dsh-breaklimit-backup/<时间戳>/rules.json
+  // 三个层级，只把 $DSH_HOME 换成相对路径，不能折成 `…/rules.json`。
+  const backupPath = recRes.payload.data.backupPath
+  assert.match(backupPath, /^dsh-breaklimit-backup\/\d{14}\/rules\.json$/u)
+  assert.equal(fs.existsSync(path.join(home, backupPath)), true)
 
   // 恢复后再读状态，rulesIndex 变成 ok
   const newStatus = await request(handler, 'GET', '/rules/status')

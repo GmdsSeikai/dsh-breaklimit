@@ -223,8 +223,12 @@ function restartCommand() {
 // 在那里改，本机使用者就看不到自己的路径了。这一层只决定「响应里给谁看什么」，不改变
 // 状态本身。
 //
-// 形态：只留最后一段，前面折成 `…`，分隔统一为 `/`。盘符、用户目录、中间层级一律不出现；
-// 字段仍是字符串，界面只需要它标明位置，不需要完整路径。
+// 形态：只留最后一段，前面折成 `…`，分隔统一为 `/`。盘符、用户目录、中间层级一律不出现。
+//
+// 例外是「用户要按这个路径去磁盘上找文件」的字段：`redactPath` 只留最后一段，
+// `dsh-breaklimit-backup/<时间戳>/rules.json` 会被砍成 `…/rules.json`，用户拿着它
+// 找不到备份。这类字段用 `relHomePath`：同样不暴露盘符与用户名，但保留 `$DSH_HOME`
+// 以下的全部层级，前端补上 `$DSH_HOME/` 前缀即可直接粘贴到资源管理器。
 function redactPath(value) {
   if (typeof value !== 'string') return value
   const parts = value
@@ -233,6 +237,27 @@ function redactPath(value) {
     .filter(part => part !== '' && part !== '.')
   if (parts.length < 2) return value
   return `…/${parts[parts.length - 1]}`
+}
+
+/**
+ * 相对 `$DSH_HOME` 的路径，分隔统一为 `/`。用于必须让用户照着去找文件的字段。
+ *
+ * 不在根内的路径退回 `redactPath`：宁可只给最后一段，也不把盘符或用户名漏出去。
+ * 根目录本身返回空串，`$DSH_HOME/` 由前端拼。
+ *
+ * @param {unknown} value - 绝对路径。
+ * @param {string} root - `$DSH_HOME`。
+ * @returns {unknown} 相对路径；不是字符串或不在根内时按 `redactPath` 处理。
+ */
+function relHomePath(value, root) {
+  if (typeof value !== 'string' || value === '') return value
+  if (typeof root !== 'string' || root === '') return redactPath(value)
+  const normalize = text => text.replace(/\\/g, '/').replace(/\/+$/u, '')
+  const target = normalize(value)
+  const base = normalize(root)
+  if (target === base) return ''
+  if (!target.startsWith(`${base}/`)) return redactPath(value)
+  return target.slice(base.length + 1)
 }
 
 // 少数消息把路径写进了正文：`readInject` 的失败信息形如 `注入文件不可读：<绝对路径>`。
@@ -334,7 +359,8 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
           message: redactPathInText(status.inject.message, status.inject.file),
         },
         lock: { ...status.lock, file: redactPath(status.lock.file) },
-        rulesIndexPath: redactPath(status.rulesIndexPath),
+        // 清单路径要能让用户去磁盘上找：只留 `…/rules.json` 等于没给。
+        rulesIndexPath: relHomePath(status.rulesIndexPath, home()),
       })
     },
 
@@ -467,7 +493,7 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
       active: rules.readActive(home()),
       rules: rules.listRules(home()),
       rulesIndex: rules.readIndex(home()).kind,
-      rulesIndexPath: redactPath(rules.rulesIndexPath(home())),
+      rulesIndexPath: relHomePath(rules.rulesIndexPath(home()), home()),
     }),
 
     'GET /rules/read': (req) => {
@@ -589,7 +615,8 @@ function buildRoutes(ctx, config, runtime, bodyLimit) {
         return envelope(400, recovered.code ?? 'recovery_failed', recovered.reason)
       }
       return envelope(200, 'recovered', '规则清单已备份并重置为空清单。', {
-        backupPath: redactPath(recovered.backupPath),
+        // 相对 `$DSH_HOME`：前端补前缀后是一个能直接粘贴进资源管理器的路径。
+        backupPath: relHomePath(recovered.backupPath, home()),
         backupBytes: recovered.backupBytes,
         rulesIndex: recovered.rulesIndex,
       })
