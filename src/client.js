@@ -37,6 +37,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   const RULE_TARGETS = ["AGENTS.md", "CLAUDE.md"]
   const RULE_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/
   const LIST_LIMIT = 5
+  // 浮窗与设置页是两个挂载点、两份 state。浮窗改了档位，设置页那份就旧了；
+  // 用一个自定义事件把「后端状态变了」传过去，不把 load 从设置页里导出来。
+  const STATE_CHANGED_EVENT = "bkl:state-changed"
 
   // ---- 宿主令牌 ------------------------------------------------------------
   //
@@ -604,6 +607,12 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       errRuleIndexWithBodyNext: "新正文已写入 bodies/ 目录，但 rules.json 未能同步更新，建议重新保存一次。",
       errRuleLanding: "正文与清单已保存，但未能同步写入目标文件",
       errRuleLandingNext: "规则已落盘并生效于清单，但写入 AGENTS.md 或 CLAUDE.md 时失败，请检查该文件是否被外部占用或写保护。",
+      errRuleConflict: "规则清单在保存过程中被别的窗口改过",
+      errRuleConflictNext: "这次保存没有覆盖它。点「重新检查」看最新内容，再保存一次。",
+      errRuleTarget: "写入目标只能是 AGENTS.md 或 CLAUDE.md",
+      errRuleTargetNext: "重新打开这条规则，在「写入哪个文件」里选一个。",
+      errRuleBodyRemove: "规则已从列表移除，但正文文件没删掉",
+      errRuleBodyRemoveNext: "列表里不会再出现它；正文仍留在 bodies/ 目录，需要时可以手动删。",
       errServer: "插件后端出错了",
       errServerNext: "点「重新检查」；反复出现，请把错误代码报给作者。",
       errUnknown: "操作没有成功",
@@ -611,6 +620,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       breaklimitButton: "破限",
       dockPopoverTitle: "破限快捷设置",
       dockModeTitle: "提示词模式",
+      dockTierFailed: "切换失败，当前仍是原来那档。",
       confirmOverwriteAlias: (from) => `词条「${String(from)}」已存在，确定覆盖吗？`,
       confirmDeleteAlias: (from) => `确定删除词条「${String(from)}」吗？`,
       aliasTitle: "目标词表",
@@ -963,6 +973,12 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       errRuleIndexWithBodyNext: "The new body is in bodies/, but rules.json was not updated. Try saving again.",
       errRuleLanding: "Body and index saved, but failed to sync landing file",
       errRuleLandingNext: "The rule is saved in bodies/ and the index, but writing to the target file failed. Check if it is locked or write-protected.",
+      errRuleConflict: "The rules index changed in another window during the save",
+      errRuleConflictNext: "This save did not overwrite it. Press Check again to load the latest list, then save once more.",
+      errRuleTarget: "The target must be AGENTS.md or CLAUDE.md",
+      errRuleTargetNext: "Reopen this rule and pick a file under Where to write.",
+      errRuleBodyRemove: "The rule was removed from the list, but its body file was not deleted",
+      errRuleBodyRemoveNext: "It no longer appears in the list; the body stays in bodies/ if you want to delete it by hand.",
       errServer: "The plugin backend failed",
       errServerNext: "Press Check again. If it keeps happening, report the error code to the author.",
       errUnknown: "The action did not succeed",
@@ -970,6 +986,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       breaklimitButton: "Breaklimit",
       dockPopoverTitle: "Quick Breaklimit Settings",
       dockModeTitle: "Prompt Mode",
+      dockTierFailed: "Switch failed; the mode is unchanged.",
       confirmOverwriteAlias: (from) => `Entry "${String(from)}" already exists. Overwrite?`,
       confirmDeleteAlias: (from) => `Delete entry "${String(from)}"?`,
       aliasTitle: "Target words",
@@ -1094,6 +1111,11 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         )
       case "landing_write_failed":
         return make(T.errRuleLanding, T.errRuleLandingNext, "refresh")
+      case "conflict": return make(T.errRuleConflict, T.errRuleConflictNext, "refresh")
+      // 显式列出：default 里 `invalid_` 一律翻成「请求格式不对（插件内部问题）」，
+      // 而 target 非法是用户能自己改的，说成内部问题等于把人挡在门外。
+      case "invalid_target": return make(T.errRuleTarget, T.errRuleTargetNext, null)
+      case "body_remove_failed": return make(T.errRuleBodyRemove, T.errRuleBodyRemoveNext, "refresh")
       case "rule_invalid":
       case "rule_unreadable": return make(T.errRule, T.errRuleNext, "refresh")
       default:
@@ -1912,7 +1934,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           onAction: onRecover,
         })
         : null,
-      rules.length === 0 && edit === null
+      // 清单读不出来时列表必然是空的，但「还没有规则」不成立：那是真的没有，
+      // 这里是读不到。两条提示同时出现，用户会以为新建一条就能修好。
+      rules.length === 0 && edit === null && !isCorrupt
         ? h(Empty, {
           title: T.rulesEmptyTitle,
           body: T.rulesEmptyBody,
@@ -2072,6 +2096,15 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     }, [])
 
     useEffect(() => { void load() }, [load])
+
+    // 浮窗改了档位或词表，这里那份状态就旧了。两个挂载点各持一份 state，
+    // 用事件而不是共享 store：只需要「重新拉一次」，不需要新的全局状态层。
+    useEffect(() => {
+      if (typeof window === "undefined" || typeof window.addEventListener !== "function") return undefined
+      const onStateChanged = () => { void load() }
+      window.addEventListener(STATE_CHANGED_EVENT, onStateChanged)
+      return () => { window.removeEventListener(STATE_CHANGED_EVENT, onStateChanged) }
+    }, [load])
 
     /** 写操作的统一外壳：同一时刻只跑一个；失败就近报错；reload 为真时无论成败都重新拉状态。 */
     const run = useCallback(async (scope, work, reload) => {
@@ -2773,6 +2806,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const [phase, setPhase] = useState("loading")
     const [tier, setTier] = useState("recommended")
     const [tierBusy, setTierBusy] = useState(false)
+    const [tierFailed, setTierFailed] = useState(false)
     const [open, setOpen] = useState(false)
     const [fromInput, setFromInput] = useState("")
     const [toInput, setToInput] = useState("")
@@ -2806,11 +2840,20 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const switchTier = async (next) => {
       if (next === tier || tierBusy) return
       setTierBusy(true)
+      setTierFailed(false)
       try {
         const payload = await post("/tier", { tier: next })
-        if (aliveRef.current && payload?.data?.tier) setTier(payload.data.tier)
-      } catch {}
-      finally {
+        if (!aliveRef.current) return
+        const applied = payload?.data?.tier
+        if (typeof applied === "string") setTier(applied)
+        // 让设置页重新拉一次状态：它那份 tierInfo 不跟着这里变。
+        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+          window.dispatchEvent(new CustomEvent(STATE_CHANGED_EVENT))
+        }
+      } catch {
+        // 不做静默：档位没变，按钮还停在原来那档，用户得知道为什么点了没反应。
+        if (aliveRef.current) setTierFailed(true)
+      } finally {
         if (aliveRef.current) setTierBusy(false)
       }
     }
@@ -2940,15 +2983,20 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
               h("button", {
                 type: "button",
                 style: tier === "recommended" ? merge(ALIAS.modeBtn, ALIAS.modeBtnActive) : ALIAS.modeBtn,
-                disabled: tierBusy,
+                // 用 aria-disabled 而不是 disabled：项目里所有按钮都保留键盘焦点，
+                // 真正挡住重复点击的是 switchTier 里的 tierBusy 判断。
+                "aria-disabled": tierBusy ? "true" : undefined,
+                "aria-pressed": tier === "recommended" ? "true" : "false",
                 onClick: () => { void switchTier("recommended") },
               }, T.modeRecommended),
               h("button", {
                 type: "button",
                 style: tier === "unrestricted" ? merge(ALIAS.modeBtn, ALIAS.modeBtnActive) : ALIAS.modeBtn,
-                disabled: tierBusy,
+                "aria-disabled": tierBusy ? "true" : undefined,
+                "aria-pressed": tier === "unrestricted" ? "true" : "false",
                 onClick: () => { void switchTier("unrestricted") },
               }, T.modeUnrestricted)),
+            tierFailed ? h("p", { style: ALIAS.fail }, T.dockTierFailed) : null,
 
             h("div", { style: ALIAS.divider }),
 
