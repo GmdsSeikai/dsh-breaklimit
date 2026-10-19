@@ -2807,6 +2807,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const [tier, setTier] = useState("recommended")
     const [tierBusy, setTierBusy] = useState(false)
     const [tierFailed, setTierFailed] = useState(false)
+    const [pendingTier, setPendingTier] = useState(null)
     const [open, setOpen] = useState(false)
     const [fromInput, setFromInput] = useState("")
     const [toInput, setToInput] = useState("")
@@ -2858,6 +2859,20 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       }
     }
 
+    // 浮窗贴着输入框，误触代价不小：`POST /tier` 不只换提示词，还会连带提交
+    // 执行层预算（超时、输出上限、子代理深度）。所以和设置页一样先确认一次，
+    // 两个入口的行为必须一致。
+    const requestTier = (next) => {
+      if (next === tier || tierBusy) return
+      setPendingTier(next)
+    }
+
+    const confirmTier = () => {
+      const target = pendingTier
+      setPendingTier(null)
+      if (target !== null) void switchTier(target)
+    }
+
     useEffect(() => {
       aliveRef.current = true
       void load()
@@ -2875,6 +2890,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           setOpen(false)
           setConfirmFrom(null)
           setDeletingIndex(null)
+          setPendingTier(null)
         }
       }
       const onKeyDown = (event) => {
@@ -2882,6 +2898,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           setOpen(false)
           setConfirmFrom(null)
           setDeletingIndex(null)
+          setPendingTier(null)
         }
       }
       document.addEventListener("mousedown", onPointerDown)
@@ -2961,7 +2978,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         "aria-haspopup": "dialog",
         "aria-expanded": open ? "true" : "false",
         title: T.dockPopoverTitle,
-        onClick: () => { setOpen((value) => !value) },
+        onClick: () => { setOpen((value) => !value); setPendingTier(null) },
       },
         h("span", { style: { fontWeight: 600, color: tk.label } }, T.breaklimitButton),
         h("span", { style: { color: tk.label2 } }, "·"),
@@ -2974,10 +2991,10 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                 type: "button",
                 style: ALIAS.close,
                 "aria-label": T.aliasClose,
-                onClick: () => { setOpen(false) },
+                onClick: () => { setOpen(false); setPendingTier(null) },
               }, "\u00D7")),
 
-            // 提示词模式快速切换
+            // 提示词模式快速切换。点一下只是选中待切换项，确认后才提交。
             h("div", { style: ALIAS.subhead }, T.dockModeTitle),
             h("div", { style: ALIAS.modeRow },
               h("button", {
@@ -2987,15 +3004,22 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                 // 真正挡住重复点击的是 switchTier 里的 tierBusy 判断。
                 "aria-disabled": tierBusy ? "true" : undefined,
                 "aria-pressed": tier === "recommended" ? "true" : "false",
-                onClick: () => { void switchTier("recommended") },
+                onClick: () => { requestTier("recommended") },
               }, T.modeRecommended),
               h("button", {
                 type: "button",
                 style: tier === "unrestricted" ? merge(ALIAS.modeBtn, ALIAS.modeBtnActive) : ALIAS.modeBtn,
                 "aria-disabled": tierBusy ? "true" : undefined,
                 "aria-pressed": tier === "unrestricted" ? "true" : "false",
-                onClick: () => { void switchTier("unrestricted") },
+                onClick: () => { requestTier("unrestricted") },
               }, T.modeUnrestricted)),
+            pendingTier !== null
+              ? h("div", { style: ALIAS.warnBox },
+                  h("span", null, T.confirmModeTitle(modeLabel(pendingTier))),
+                  h("button", { type: "button", style: ALIAS.confirmBtn, onClick: confirmTier }, T.confirmModeYes),
+                  h("button", { type: "button", style: ALIAS.confirmBtn, onClick: () => { setPendingTier(null) } }, T.cancel))
+              : null,
+            pendingTier !== null ? h("p", { style: ALIAS.foot }, T.confirmModeBody) : null,
             tierFailed ? h("p", { style: ALIAS.fail }, T.dockTierFailed) : null,
 
             h("div", { style: ALIAS.divider }),
