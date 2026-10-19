@@ -271,10 +271,51 @@ function runStatus(options, env) {
   return result.ok ? 0 : 1
 }
 
-function runDoctor(options, env) {
+/**
+ * 探测外部命令，返回去掉首尾空白的输出，取不到返回 null。
+ *
+ * 单拎出来是为了让 `--doctor` 的测试不依赖 runner 上恰好装了什么：pnpm 在 GitHub
+ * Actions 的 runner 上不存在，命令一走真实 PATH，那条「全部 PASS」的用例就必红。
+ * 测试传一个桩进去，本机与 CI 的结论才一致。
+ *
+ * Windows 上 pnpm 是 `.cmd` 脚本，`execFileSync` 直接跑不了，要过一层 `cmd.exe`。
+ * 这个平台差异留在默认实现里，调用方只关心「命令能不能跑、输出了什么」。
+ *
+ * @param {Record<string, string | undefined>} childEnv - 子进程环境变量。
+ * @returns {(bin: string, args: string[]) => string | null}
+ */
+function makeProbe(childEnv) {
+  return (bin, args) => {
+    const viaShell = process.platform === 'win32' && bin === 'pnpm'
+    const file = viaShell ? 'cmd.exe' : bin
+    const argv = viaShell ? ['/d', '/s', '/c', `${bin} ${args.join(' ')}`] : args
+    try {
+      const text = execFileSync(file, argv, {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 3000,
+        env: childEnv,
+      }).trim()
+      return text === '' ? null : text
+    } catch {
+      return null
+    }
+  }
+}
+
+/**
+ * 环境诊断。
+ *
+ * @param {object} options - 命令行参数。
+ * @param {Record<string, string | undefined>} env - 环境变量。
+ * @param {{ probe?: (bin: string, args: string[]) => string | null }} [deps] - 注入点，仅测试使用。
+ * @returns {number} 全部通过为 0，有失败项为 1。
+ */
+function runDoctor(options, env, deps = {}) {
   const lines = ['breaklimit 环境诊断 (--doctor)\n']
   let failCount = 0
   const childEnv = { ...process.env, ...env }
+  const probe = deps.probe ?? makeProbe(childEnv)
 
   // 1. Node.js 版本
   const nodeVer = process.versions.node
@@ -289,14 +330,7 @@ function runDoctor(options, env) {
   }
 
   // 2. pnpm 可用性
-  let pnpmVer = null
-  try {
-    if (process.platform === 'win32') {
-      pnpmVer = execFileSync('cmd.exe', ['/d', '/s', '/c', 'pnpm --version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000, env: childEnv }).trim()
-    } else {
-      pnpmVer = execFileSync('pnpm', ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000, env: childEnv }).trim()
-    }
-  } catch {}
+  const pnpmVer = probe('pnpm', ['--version'])
   if (pnpmVer) {
     lines.push(`  [PASS] pnpm 包管理器：v${pnpmVer}`)
   } else {
@@ -306,10 +340,7 @@ function runDoctor(options, env) {
   }
 
   // 3. git 可用性
-  let gitVer = null
-  try {
-    gitVer = execFileSync('git', ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000, env: childEnv }).trim()
-  } catch {}
+  const gitVer = probe('git', ['--version'])
   if (gitVer) {
     lines.push(`  [PASS] git 版本控制：${gitVer}`)
   } else {
@@ -317,6 +348,7 @@ function runDoctor(options, env) {
     lines.push('  [FAIL] git 版本控制：未找到 git 命令')
     lines.push('         修复指引：请安装 Git 并将其加入系统 PATH 环境变量')
   }
+
 
   // 4. 宿主源码根
   const hostRoot = findHostRoot(options.hostRoot, env)
@@ -331,10 +363,8 @@ function runDoctor(options, env) {
       lines.push(`  [FAIL] 宿主源码根：目录缺少宿主结构 (${hostRoot})`)
       lines.push('         修复指引：请确认该路径是 deepseek-harness 源码仓库目录')
     } else {
-      let headShort = ''
-      try {
-        headShort = execFileSync('git', ['-C', hostRoot, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }).trim()
-      } catch {}
+      // HEAD 读不到只影响展示，不算失败项：目录结构对了就说明路径选对了。
+      const headShort = probe('git', ['-C', hostRoot, 'rev-parse', '--short', 'HEAD'])
       lines.push(`  [PASS] 宿主源码根：${hostRoot}${headShort ? ` (HEAD: ${headShort})` : ''}`)
     }
   }
@@ -405,9 +435,10 @@ function runEdit(env) {
  *
  * @param {string[]} argv - 不含 node 与脚本名的参数。
  * @param {Record<string, string | undefined>} env - 环境变量。
+ * @param {{ probe?: (bin: string, args: string[]) => string | null }} [deps] - 外部命令探测的注入点，测试用。
  * @returns {number | null} 退出码；null 表示不需要设置（例如 --edit 交给子进程）。
  */
-export function run(argv, env = process.env) {
+export function run(argv, env = process.env, deps = {}) {
   const options = parseArgs(argv, env)
   const home = resolveHome(env)
 
@@ -415,7 +446,7 @@ export function run(argv, env = process.env) {
     process.stdout.write(HELP)
     return 0
   }
-  if (options.action === 'doctor') return runDoctor(options, env)
+  if (options.action === 'doctor') return runDoctor(options, env, deps)
   if (options.action === 'status') return runStatus(options, env)
   if (options.action === 'tier') {
     const targetTier = options.tier

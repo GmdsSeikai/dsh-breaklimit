@@ -11,7 +11,7 @@ function tempDir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix))
 }
 
-function runCapture(argv, env) {
+function runCapture(argv, env, deps) {
   let stdoutText = ''
   let stderrText = ''
   const origStdout = process.stdout.write
@@ -25,7 +25,7 @@ function runCapture(argv, env) {
     return true
   }
   try {
-    const code = run(argv, env)
+    const code = run(argv, env, deps)
     return { code, stdout: stdoutText, stderr: stderrText }
   } finally {
     process.stdout.write = origStdout
@@ -66,11 +66,40 @@ test('--doctor 在完备的虚拟环境下全部 PASS 返回 0', () => {
     },
   }), 'utf8')
 
-  const { code, stdout } = runCapture(['--doctor', '--host-root', hostRoot], { DSH_HOME: home })
+  // pnpm 与 git 用桩：CI 的 runner 上没有 pnpm，走真实 PATH 这条用例必红。
+  const probe = (bin, args) => {
+    if (bin === 'pnpm') return '9.15.0'
+    if (bin === 'git') return args.includes('rev-parse') ? '687f282e' : 'git version 2.45.0'
+    return null
+  }
+  const { code, stdout } = runCapture(['--doctor', '--host-root', hostRoot], { DSH_HOME: home }, { probe })
   assert.equal(code, 0)
   assert.match(stdout, /\[PASS\] Node\.js 运行时/)
-  assert.match(stdout, /\[PASS\] 宿主源码根/)
+  assert.match(stdout, /\[PASS\] pnpm 包管理器：v9\.15\.0/)
+  assert.match(stdout, /\[PASS\] git 版本控制：git version 2\.45\.0/)
+  assert.match(stdout, /\[PASS\] 宿主源码根.*HEAD: 687f282e/)
   assert.match(stdout, /\[PASS\] DSH 数据目录/)
   assert.match(stdout, /\[PASS\] 插件注册状态/)
   assert.match(stdout, /诊断完成：全部检查项通过/)
+})
+
+test('--doctor 在 pnpm 与 git 都缺失时判失败，与 runner 实际安装无关', () => {
+  const home = tempDir('bkl-doctor-nodeps-home-')
+  const hostRoot = tempDir('bkl-doctor-nodeps-host-')
+  fs.mkdirSync(path.join(hostRoot, 'apps', 'cli', 'src'), { recursive: true })
+  fs.mkdirSync(path.join(home, 'profiles', 'web-breaklimit'), { recursive: true })
+  fs.writeFileSync(path.join(home, 'profiles', 'web-breaklimit', 'package.json'), JSON.stringify({
+    name: 'web-breaklimit',
+    dependencies: { 'rumo-dsh-breaklimit': 'file:x' },
+  }), 'utf8')
+
+  const { code, stdout } = runCapture(
+    ['--doctor', '--host-root', hostRoot],
+    { DSH_HOME: home },
+    { probe: () => null },
+  )
+  assert.equal(code, 1)
+  assert.match(stdout, /\[FAIL\] pnpm 包管理器：未找到 pnpm 命令/)
+  assert.match(stdout, /\[FAIL\] git 版本控制：未找到 git 命令/)
+  assert.match(stdout, /发现 2 处环境问题/)
 })
