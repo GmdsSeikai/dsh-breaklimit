@@ -920,9 +920,9 @@ export function recoverCorruptIndex(home) {
     if (!fs.existsSync(file)) {
       return failure('index_missing', '规则清单文件不存在')
     }
-    let sourceStat
+    let original
     try {
-      sourceStat = fs.statSync(file)
+      original = fs.readFileSync(file)
     } catch (error) {
       return failure('stat_failed', `读取原清单信息失败：${messageOf(error)}`)
     }
@@ -934,19 +934,31 @@ export function recoverCorruptIndex(home) {
     const pad = value => String(value).padStart(2, '0')
     const stamp = `${String(now.getFullYear())}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
       + `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
-    const backupDir = path.join(home, 'dsh-breaklimit-backup', stamp)
-    const backupFile = path.join(backupDir, 'rules.json')
+    const backupRoot = path.join(home, 'dsh-breaklimit-backup')
+    let backupDir = null
+    let backupFile
 
     try {
-      fs.mkdirSync(backupDir, { recursive: true })
-      fs.copyFileSync(file, backupFile)
-      const backupStat = fs.statSync(backupFile)
-      if (backupStat.size !== sourceStat.size) {
-        throw new Error(`备份大小不符：期望 ${String(sourceStat.size)}，实际 ${String(backupStat.size)}`)
+      fs.mkdirSync(backupRoot, { recursive: true })
+      const preferred = path.join(backupRoot, stamp)
+      try {
+        fs.mkdirSync(preferred)
+        backupDir = preferred
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error
+        backupDir = fs.mkdtempSync(`${preferred}-`)
+      }
+      backupFile = path.join(backupDir, 'rules.json')
+      fs.copyFileSync(file, backupFile, fs.constants.COPYFILE_EXCL)
+      if (!fs.readFileSync(backupFile).equals(original)) {
+        throw new Error('备份字节与原清单不符')
+      }
+      if (!fs.readFileSync(file).equals(original)) {
+        throw new Error('原清单在备份期间被改动')
       }
     } catch (error) {
       try {
-        fs.rmSync(backupDir, { recursive: true, force: true })
+        if (backupDir !== null) fs.rmSync(backupDir, { recursive: true, force: true })
       } catch {
         // 清理失败不盖住原始错误。
       }
@@ -962,7 +974,7 @@ export function recoverCorruptIndex(home) {
     return {
       ok: true,
       backupPath: backupFile,
-      backupBytes: sourceStat.size,
+      backupBytes: original.length,
       rulesIndex: 'ok',
     }
   })

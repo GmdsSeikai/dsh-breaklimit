@@ -1,6 +1,6 @@
 {
   "name": "rumo-dsh-breaklimit",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "DeepSeek Harness 破限插件：严格补丁引擎（预哈希、命中数守卫、事务回滚）加上宿主自身的运行时接缝，两者职责不重叠。",
   "type": "module",
   "main": "./src/plugin.js",
@@ -26,7 +26,10 @@
   "scripts": {
     "test": "node --test",
     "lint": "node tools/lint-exports.mjs",
-    "check": "node tools/lint-exports.mjs && node tools/check-client.mjs && node --test && node tools/check-doc-numbers.mjs",
+    "check": "node tools/release.mjs check && node tools/lint-exports.mjs && node tools/check-client.mjs && node --test && node tools/check-doc-numbers.mjs",
+    "check:release": "node tools/release.mjs check",
+    "release:pack": "node tools/release.mjs pack",
+    "release:verify": "node tools/release.mjs verify",
     "check:host": "node tools/selfcheck.mjs",
     "reconcile": "node tools/reconcile.mjs",
     "fixture": "node tools/make-fixture.mjs",

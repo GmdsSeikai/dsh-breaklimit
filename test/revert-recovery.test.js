@@ -92,6 +92,51 @@ function tracingWrites(root, intercept = () => null) {
   return { writeFile, rootWrites }
 }
 
+test('回退写入返回但内容不符时保留恢复记录，修复写入器后可重试', t => {
+  const root = tempDir()
+  const home = tempDir()
+  t.after(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(home, { recursive: true, force: true }) })
+  write(root, 'a.txt', 'A1\n')
+  const patches = [replacePatch([{ path: 'a.txt', before: 'A1', after: 'A2', expectHits: 1 }])]
+  assert.equal(apply(root, home, patches).ok, true)
+  const result = revertPatches({ root, home, writeFile(file, content) {
+    if (file === path.join(root, 'a.txt')) return
+    atomicWrite(file, content)
+  } })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'revert_failed')
+  assert.equal(readState(home).kind, 'ok')
+  assert.equal(read(root, 'a.txt'), 'A2\n')
+  assert.equal(revertPatches({ root, home }).ok, true)
+  assert.equal(read(root, 'a.txt'), 'A1\n')
+})
+
+test('失败补偿返回但未恢复内容时如实报告，并保留重试所需记录', t => {
+  const root = tempDir()
+  const home = tempDir()
+  t.after(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(home, { recursive: true, force: true }) })
+  write(root, 'a.txt', 'A1\n')
+  write(root, 'b.txt', 'B1\n')
+  const patches = [replacePatch([
+    { path: 'a.txt', before: 'A1', after: 'A2', expectHits: 1 },
+    { path: 'b.txt', before: 'B1', after: 'B2', expectHits: 1 },
+  ])]
+  assert.equal(apply(root, home, patches).ok, true)
+  const result = revertPatches({ root, home, writeFile(file, content) {
+    if (file === path.join(root, 'b.txt')) throw new Error('simulated revert failure')
+    if (file === path.join(root, 'a.txt') && content === 'A2\n') return
+    atomicWrite(file, content)
+  } })
+  assert.equal(result.ok, false)
+  assert.equal(result.recoveryErrors.length, 1)
+  assert.match(result.recoveryErrors[0], /复校验失败/)
+  assert.deepEqual(result.restored, ['a.txt'])
+  assert.equal(readState(home).kind, 'ok')
+  assert.equal(revertPatches({ root, home }).ok, true)
+  assert.equal(read(root, 'a.txt'), 'A1\n')
+  assert.equal(read(root, 'b.txt'), 'B1\n')
+})
+
 test('快照内容与记录不符时拒绝回退，目标文件一个字节都不动', () => {
   const root = tempDir()
   const home = tempDir()
