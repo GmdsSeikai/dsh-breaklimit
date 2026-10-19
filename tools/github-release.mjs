@@ -61,18 +61,49 @@ export function prepareDraft(repo, tag, sha, directory, notesFile, call = gh) {
   } finally { fs.rmSync(downloaded, { recursive: true, force: true }) }
 }
 
-export function verifyDraft(repo, tag, sha, hostRoot, outputFile, call = gh) {
+function assetIdentity(release) {
+  return release.assets.map(asset => [asset.id, asset.name, asset.size, asset.updated_at]).sort()
+}
+
+export function downloadDraft(repo, tag, sha, directory, call = gh) {
   const metadata = resolveCandidate(repo, tag, sha)
   requireRemoteTag(tag, sha, call)
   const release = findRelease(tag, call)
   if (release === null) throw new Error('Draft release not found')
   requireDraft(release, tag, sha)
+  if (fs.existsSync(directory)) throw new Error('Draft download destination already exists; use a new directory')
+  const assets = path.join(directory, 'assets')
+  fs.mkdirSync(assets, { recursive: true })
+  call(['release', 'download', tag, '--repo', REPOSITORY, '--dir', assets])
+  verifyRelease(repo, tag, sha, assets)
+  const snapshot = { ...metadata, draftId: release.id, identity: assetIdentity(release) }
+  fs.writeFileSync(path.join(directory, 'draft-snapshot.json'), `${JSON.stringify(snapshot, null, 2)}\n`)
+  checkDraft(repo, tag, sha, path.join(directory, 'draft-snapshot.json'), call)
+  return snapshot
+}
+
+export function checkDraft(repo, tag, sha, snapshotFile, call = gh) {
+  resolveCandidate(repo, tag, sha)
+  const snapshot = JSON.parse(fs.readFileSync(snapshotFile, 'utf8'))
+  if (snapshot.sourceSha !== sha || snapshot.tag !== tag || !Array.isArray(snapshot.identity)) throw new Error('Draft snapshot source mismatch')
+  requireRemoteTag(tag, sha, call)
+  const current = findRelease(tag, call)
+  if (current === null) throw new Error('Draft disappeared during verification')
+  requireDraft(current, tag, sha)
+  if (current.id !== snapshot.draftId || JSON.stringify(assetIdentity(current)) !== JSON.stringify(snapshot.identity)) {
+    throw new Error('Draft assets changed during verification; rerun verification')
+  }
+  return snapshot
+}
+
+export function verifyDownloaded(repo, tag, sha, hostRoot, directory, outputFile) {
+  const metadata = resolveCandidate(repo, tag, sha)
+  const snapshot = JSON.parse(fs.readFileSync(path.join(directory, 'draft-snapshot.json'), 'utf8'))
+  if (snapshot.sourceSha !== sha || snapshot.tag !== tag) throw new Error('Draft snapshot source mismatch')
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bkl-draft-verification-'))
   try {
-    const directory = path.join(temp, 'assets')
-    fs.mkdirSync(directory)
-    call(['release', 'download', tag, '--repo', REPOSITORY, '--dir', directory])
-    const extracted = extractRelease(repo, tag, sha, directory, path.join(temp, 'extracted'))
+    const assetsDir = path.join(directory, 'assets')
+    const extracted = extractRelease(repo, tag, sha, assetsDir, path.join(temp, 'extracted'))
     const env = { ...process.env, DSH_HOME: path.join(temp, 'home'), DSH_BREAKLIMIT_HOST_ROOT: path.resolve(hostRoot) }
     delete env.GH_TOKEN
     delete env.GITHUB_TOKEN
@@ -85,15 +116,22 @@ export function verifyDraft(repo, tag, sha, hostRoot, outputFile, call = gh) {
       [process.execPath, ['tools/selfcheck.mjs', path.resolve(hostRoot)]],
     ]
     for (const [file, args] of checks) process.stdout.write(run(file, args, { cwd: extracted, env, timeout: 300000 }))
-    const assets = fs.readdirSync(directory).sort().map(name => ({ name, sha256: sha256(fs.readFileSync(path.join(directory, name))) }))
-    const latest = findRelease(tag, call)
-    if (latest === null) throw new Error('Draft disappeared during verification')
-    requireDraft(latest, tag, sha)
-    requireRemoteTag(tag, sha, call)
-    const identity = value => value.assets.map(asset => [asset.id, asset.name, asset.size, asset.updated_at]).sort()
-    if (JSON.stringify(identity(release)) !== JSON.stringify(identity(latest))) throw new Error('Draft assets changed during verification; rerun verification')
-    const report = { ...metadata, draftId: release.id, assets, checks: checks.map(([, args]) => args.join(' ')), verifiedAt: new Date().toISOString(),
+    const assets = fs.readdirSync(assetsDir).sort().map(name => ({ name, sha256: sha256(fs.readFileSync(path.join(assetsDir, name))) }))
+    const report = { ...metadata, draftId: snapshot.draftId, assets, checks: checks.map(([, args]) => args.join(' ')), verifiedAt: new Date().toISOString(),
       boundaries: ['Source and downloaded-archive checks only; real host installation, browser and sandbox acceptance are recorded separately.'] }
+    fs.mkdirSync(path.dirname(path.resolve(outputFile)), { recursive: true })
+    fs.writeFileSync(outputFile, `${JSON.stringify(report, null, 2)}\n`)
+    return report
+  } finally { fs.rmSync(temp, { recursive: true, force: true }) }
+}
+
+export function verifyDraft(repo, tag, sha, hostRoot, outputFile, call = gh) {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bkl-download-'))
+  try {
+    const directory = path.join(temp, 'input')
+    downloadDraft(repo, tag, sha, directory, call)
+    const report = verifyDownloaded(repo, tag, sha, hostRoot, directory, path.join(temp, 'verification.json'))
+    checkDraft(repo, tag, sha, path.join(directory, 'draft-snapshot.json'), call)
     fs.mkdirSync(path.dirname(path.resolve(outputFile)), { recursive: true })
     fs.writeFileSync(outputFile, `${JSON.stringify(report, null, 2)}\n`)
     return report
@@ -105,6 +143,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const [command, ...args] = process.argv.slice(2)
     if (command === 'prepare' && args.length === 5) console.log(JSON.stringify(prepareDraft(...args), null, 2))
     else if (command === 'verify' && args.length === 5) console.log(JSON.stringify(verifyDraft(...args), null, 2))
-    else throw new Error('Usage: github-release.mjs prepare <repo> <tag> <full-sha> <assets-dir> <notes-file> | verify <repo> <tag> <full-sha> <host-root> <report-file>')
+    else if (command === 'download' && args.length === 4) console.log(JSON.stringify(downloadDraft(...args), null, 2))
+    else if (command === 'check-draft' && args.length === 4) console.log(JSON.stringify(checkDraft(...args), null, 2))
+    else if (command === 'verify-local' && args.length === 6) console.log(JSON.stringify(verifyDownloaded(...args), null, 2))
+    else throw new Error('Usage: github-release.mjs prepare <repo> <tag> <sha> <assets> <notes> | verify <repo> <tag> <sha> <host> <report> | download <repo> <tag> <sha> <new-dir> | check-draft <repo> <tag> <sha> <snapshot> | verify-local <repo> <tag> <sha> <host> <download-dir> <report>')
   } catch (error) { console.error(error.message); process.exitCode = 1 }
 }

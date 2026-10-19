@@ -33,7 +33,7 @@ GitHub Check 须在该提交通过 Windows、Ubuntu × Node 22.19、24，以及 
 | `release-metadata.json` | 版本、标签、完整源 SHA、宿主版本与提交 |
 | `SHA256SUMS.txt` | ZIP 与来源元数据的 SHA-256 |
 
-ZIP 不含未提交文件、依赖目录、日常配置或恢复数据。打包要求源提交已落入 `origin/main`，上传与核验另查 GitHub 标签的实际 SHA。打包不执行候选代码；写权限仅授予上传草稿的任务，检查使用只读权限。
+ZIP 不含未提交文件、依赖目录、日常配置或恢复数据。打包要求源提交已落入 `origin/main`，上传与核验另查 GitHub 标签的实际 SHA。打包不执行候选代码；上传草稿的任务与源码检查分开授权。
 
 草稿已存在时，仅补传缺失附件；已有附件必须与本地产物逐字节一致。不覆盖不同内容、不替换标签、不修改已发布版本。上传中断后先查看草稿，再重新运行；如果已有附件不符，停止并人工核对。
 
@@ -57,6 +57,8 @@ node tools/github-release.mjs prepare . $ReleaseTag $SourceSha $AssetsDir docs/r
 1. 从 GitHub 下载实际附件，核对完整资产集合、来源元数据和哈希；从指定提交独立重建 ZIP，比对全部字节。
 2. 在新目录解压，在 Windows、Ubuntu × Node 22.19、24 执行接口、语言、测试、文档数字、固定宿主对账与夹具预检。
 3. 核对验证期间草稿附件没有变化，保存每个组合的 `verification.json` Actions 产物。报告包含源 SHA、草稿 ID 和附件哈希。
+
+GitHub 读取未发布草稿需要写权限，因此下载附件和最终核对元数据分别放在仅运行 main 工具的任务中。四组解压与测试任务只读，不接收草稿 token，不执行任何上传或发布操作。
 
 本地可执行：
 

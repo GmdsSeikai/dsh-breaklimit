@@ -20,7 +20,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # GitHub requires push access to read an unpublished draft.
+    steps:
+      - name: Require the reviewed main workflow
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+        run: test "$WORKFLOW_REF" = refs/heads/main
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Download and check bytes without executing candidate code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: node tools/github-release.mjs download . "$RELEASE_TAG" "$SOURCE_SHA" draft-input
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: draft-input
+          path: draft-input/
+          if-no-files-found: error
+
   downloaded-archive:
+    needs: download
     name: Downloaded archive / ${{ matrix.os }} / Node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
@@ -50,15 +81,45 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node }}
-      - name: Download, verify provenance, extract and run checks
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: draft-input
+          path: draft-input
+      - name: Verify provenance, extract and run without draft access
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
           SOURCE_SHA: ${{ inputs.source_sha }}
-        run: node tooling/tools/github-release.mjs verify tooling "$RELEASE_TAG" "$SOURCE_SHA" host verification.json
+        run: node tooling/tools/github-release.mjs verify-local tooling "$RELEASE_TAG" "$SOURCE_SHA" host draft-input verification.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: verification-${{ matrix.os }}-node-${{ matrix.node }}
           path: verification.json
           if-no-files-found: error
+
+  unchanged:
+    name: Draft unchanged after all checks
+    needs: downloaded-archive
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # Inspect draft metadata only; never run candidate code here.
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: draft-input
+          path: draft-input
+      - name: Confirm the remote tag and draft attachments still match
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: node tools/github-release.mjs check-draft . "$RELEASE_TAG" "$SOURCE_SHA" draft-input/draft-snapshot.json

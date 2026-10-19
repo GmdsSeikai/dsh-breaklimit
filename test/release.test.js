@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { checkSource, extractRelease, packRelease, resolveCandidate, verifyRelease } from '../tools/release.mjs'
-import { prepareDraft, requireDraft } from '../tools/github-release.mjs'
+import { checkDraft, downloadDraft, prepareDraft, requireDraft } from '../tools/github-release.mjs'
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bkl-release-'))
@@ -179,4 +179,27 @@ test('网络或认证失败不得被当成 Release 不存在而创建新草稿',
     throw Object.assign(new Error('network unavailable'), { stderr: 'HTTP 403' })
   }), /network unavailable/)
   assert.equal(attempts, 1)
+})
+
+test('草稿下载独立核验真实附件，纯元数据检查检测验证期间的附件替换', t => {
+  const { root, repo, sha, out, notes, stored, state, call } = remoteFixture(t)
+  prepareDraft(repo, 'v0.9.2', sha, out, notes, call)
+  const writes = state.writes.length
+  const downloaded = path.join(root, 'downloaded')
+  const snapshot = downloadDraft(repo, 'v0.9.2', sha, downloaded, call)
+  assert.equal(snapshot.draftId, 42)
+  assert.equal(state.writes.length, writes, '下载和最终核对不得调用任何写接口')
+  assert.equal(checkDraft(repo, 'v0.9.2', sha, path.join(downloaded, 'draft-snapshot.json'), call).draftId, 42)
+  fs.writeFileSync(path.join(stored, 'extra.txt'), 'changed during verification')
+  assert.throws(() => checkDraft(repo, 'v0.9.2', sha, path.join(downloaded, 'draft-snapshot.json'), call), /assets changed/)
+  assert.equal(state.writes.length, writes)
+})
+
+test('损坏的草稿附件不能生成已验证下载快照', t => {
+  const { root, repo, sha, out, notes, stored, call } = remoteFixture(t)
+  prepareDraft(repo, 'v0.9.2', sha, out, notes, call)
+  fs.appendFileSync(path.join(stored, 'dsh-breaklimit-0.9.2.zip'), 'tamper')
+  const downloaded = path.join(root, 'invalid-download')
+  assert.throws(() => downloadDraft(repo, 'v0.9.2', sha, downloaded, call), /哈希/)
+  assert.equal(fs.existsSync(path.join(downloaded, 'draft-snapshot.json')), false)
 })
