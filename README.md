@@ -36,9 +36,10 @@ $env:DSH_BREAKLIMIT_HOST_ROOT = $DshRoot
 node --version
 pnpm --version
 git -C "$DshRoot" rev-parse HEAD
+node src/cli.js --doctor
 ```
 
-最后一条应输出上表中的宿主提交。宿主目录中应有 `apps/cli/src/bin.ts`；不同则先停止，确认安装形态与版本。
+最后一条应输出上表中的宿主提交。宿主目录中应有 `apps/cli/src/bin.ts`；也可以运行 `node src/cli.js --doctor` 就地检查 Node、pnpm、git 及宿主目录是否就绪。不同则先停止，确认安装形态与版本。
 
 ### 2. 准备独立的 Web profile
 

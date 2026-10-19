@@ -20,7 +20,7 @@
 
 完整 PowerShell 命令见 [README 快速安装](../README.md#快速安装windows-powershell)。保持以下顺序：
 
-1. 获取插件，填写 `$PluginRoot`、`$DshRoot`；核对 Node、pnpm、宿主提交。
+1. 获取插件，填写 `$PluginRoot`、`$DshRoot`；可用 `node src/cli.js --doctor` 就地检查 Node、pnpm、git 与宿主提交。
 2. 沿用日常启动器使用的 `DSH_HOME`，并设置 `DSH_BREAKLIMIT_HOST_ROOT`。环境变量必须由执行 CLI 和启动宿主的进程共同继承。
 3. 创建独立 Web profile，再由 `dsh plugin` 安装本地插件。
 4. 在插件目录运行 `--status`，确认预检通过后执行 `--apply`。
@@ -101,6 +101,7 @@ node tools/rebuild-state.mjs "$DshRoot"
 
 | 现象 | 先检查 | 下一步 |
 | --- | --- | --- |
+| 环境不确定或启动报错 | 运行 `node src/cli.js --doctor` | 逐项核对 Node、pnpm、git、宿主根、DSH 数据目录与插件依赖注册状态 |
 | `pnpm not found` | 同一终端运行 `pnpm --version` | 按宿主安装要求配置 pnpm，确认 PATH 后重新安装插件 |
 | 找不到 `tsx` 或宿主包 | 是否在宿主根，源码版是否已安装依赖 | 先恢复宿主原本能运行的环境，不在插件目录安装宿主依赖 |
 | 设置页没有入口 | profile 是否含 `@deepseek-ai/dsh-web-app` 和本插件 | 停止该 profile，保留现有字段，补齐缺少的 Web bundle 后重启 |

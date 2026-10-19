@@ -18,7 +18,7 @@
 // 文档让人只填一次，那命令行就得读到同一处。不推导：CLI 的进程入口是它自己，判不出
 // 宿主源码树，而拿当前目录猜会让预检对着错误的树做判断，然后报一个看起来很像成功的结论。
 
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -41,6 +41,7 @@ const HELP = `breaklimit —— rumo-dsh-breaklimit 命令行
   --status              显示预检结论、应用记录、注入文件与规则
   --apply               预检通过后应用当前选择的补丁（不通过则零写入）
   --revert              回退到应用前状态（任一文件漂移则整体拒绝）
+  --doctor              检查运行环境与依赖，输出就地诊断指引
   --tier [模式]         查看或切换提示词模式（recommended / unrestricted）
   --edit                用系统编辑器打开注入文件
   --rules               列出用户规则
@@ -68,7 +69,8 @@ function parseArgs(argv, env) {
     else if (arg === '--status') out.action = 'status'
     else if (arg === '--apply') out.action = 'apply'
     else if (arg === '--revert') out.action = 'revert'
-      else if (arg === '--tier') {
+    else if (arg === '--doctor') out.action = 'doctor'
+    else if (arg === '--tier') {
       out.action = 'tier'
       const next = argv[index + 1]
       if (next && !next.startsWith('-')) {
@@ -269,6 +271,112 @@ function runStatus(options, env) {
   return result.ok ? 0 : 1
 }
 
+function runDoctor(options, env) {
+  const lines = ['breaklimit 环境诊断 (--doctor)\n']
+  let failCount = 0
+  const childEnv = { ...process.env, ...env }
+
+  // 1. Node.js 版本
+  const nodeVer = process.versions.node
+  const [major, minor] = nodeVer.split('.').map(Number)
+  const nodeOk = (major === 22 && minor >= 19) || major >= 24
+  if (nodeOk) {
+    lines.push(`  [PASS] Node.js 运行时：v${nodeVer}（满足 >=22.19.0 || >=24.0.0）`)
+  } else {
+    failCount += 1
+    lines.push(`  [FAIL] Node.js 运行时：v${nodeVer}（要求 >=22.19.0 || >=24.0.0）`)
+    lines.push('         修复指引：请升级 Node.js 至 22.19.0+ 或 24.0.0+（官方下载：https://nodejs.org）')
+  }
+
+  // 2. pnpm 可用性
+  let pnpmVer = null
+  try {
+    if (process.platform === 'win32') {
+      pnpmVer = execFileSync('cmd.exe', ['/d', '/s', '/c', 'pnpm --version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000, env: childEnv }).trim()
+    } else {
+      pnpmVer = execFileSync('pnpm', ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000, env: childEnv }).trim()
+    }
+  } catch {}
+  if (pnpmVer) {
+    lines.push(`  [PASS] pnpm 包管理器：v${pnpmVer}`)
+  } else {
+    failCount += 1
+    lines.push('  [FAIL] pnpm 包管理器：未找到 pnpm 命令')
+    lines.push('         修复指引：请运行 npm i -g pnpm 或 corepack enable 安装 pnpm')
+  }
+
+  // 3. git 可用性
+  let gitVer = null
+  try {
+    gitVer = execFileSync('git', ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000, env: childEnv }).trim()
+  } catch {}
+  if (gitVer) {
+    lines.push(`  [PASS] git 版本控制：${gitVer}`)
+  } else {
+    failCount += 1
+    lines.push('  [FAIL] git 版本控制：未找到 git 命令')
+    lines.push('         修复指引：请安装 Git 并将其加入系统 PATH 环境变量')
+  }
+
+  // 4. 宿主源码根
+  const hostRoot = findHostRoot(options.hostRoot, env)
+  if (!hostRoot || !fs.existsSync(hostRoot)) {
+    failCount += 1
+    lines.push(`  [FAIL] 宿主源码根：${hostRoot ? `目录不存在 (${hostRoot})` : '未配置'}`)
+    lines.push('         修复指引：请设置环境变量 $env:DSH_BREAKLIMIT_HOST_ROOT="D:\\你的目录\\deepseek-harness" 或使用 --host-root')
+  } else {
+    const hasMarker = fs.existsSync(path.join(hostRoot, 'package.json')) || fs.existsSync(path.join(hostRoot, 'apps', 'cli', 'src'))
+    if (!hasMarker) {
+      failCount += 1
+      lines.push(`  [FAIL] 宿主源码根：目录缺少宿主结构 (${hostRoot})`)
+      lines.push('         修复指引：请确认该路径是 deepseek-harness 源码仓库目录')
+    } else {
+      let headShort = ''
+      try {
+        headShort = execFileSync('git', ['-C', hostRoot, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }).trim()
+      } catch {}
+      lines.push(`  [PASS] 宿主源码根：${hostRoot}${headShort ? ` (HEAD: ${headShort})` : ''}`)
+    }
+  }
+
+  // 5. DSH 数据目录与 profile
+  const home = resolveHome(env)
+  const profileDir = path.join(home, 'profiles', 'web-breaklimit')
+  if (!fs.existsSync(profileDir)) {
+    failCount += 1
+    lines.push(`  [FAIL] DSH 数据目录：未找到 web-breaklimit 配置目录 (${profileDir})`)
+    lines.push('         修复指引：请确认宿主已完成初始化，或先运行一次：./dsh.ps1 --profile web-breaklimit')
+  } else {
+    lines.push(`  [PASS] DSH 数据目录：${home} (已发现 web-breaklimit profile)`)
+  }
+
+  // 6. 插件依赖注入状态
+  const profilePkg = path.join(profileDir, 'package.json')
+  let depOk = false
+  if (fs.existsSync(profilePkg)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(profilePkg, 'utf8'))
+      depOk = Boolean(parsed.dependencies?.['rumo-dsh-breaklimit'])
+    } catch {}
+  }
+  if (depOk) {
+    lines.push('  [PASS] 插件注册状态：profiles/web-breaklimit 已声明依赖 rumo-dsh-breaklimit')
+  } else if (fs.existsSync(profileDir)) {
+    failCount += 1
+    lines.push('  [FAIL] 插件注册状态：profiles/web-breaklimit/package.json 尚未声明 rumo-dsh-breaklimit 依赖')
+    lines.push('         修复指引：请在 profiles/web-breaklimit/package.json 的 dependencies 中添加 "rumo-dsh-breaklimit"')
+  }
+
+  lines.push('')
+  if (failCount === 0) {
+    lines.push('诊断完成：全部检查项通过。\n')
+  } else {
+    lines.push(`诊断完成：发现 ${String(failCount)} 处环境问题，请根据上述修复指引处理。\n`)
+  }
+  process.stdout.write(lines.join('\n'))
+  return failCount === 0 ? 0 : 1
+}
+
 function runEdit(env) {
   const file = injectPath(env)
   if (!fs.existsSync(file)) {
@@ -307,6 +415,7 @@ export function run(argv, env = process.env) {
     process.stdout.write(HELP)
     return 0
   }
+  if (options.action === 'doctor') return runDoctor(options, env)
   if (options.action === 'status') return runStatus(options, env)
   if (options.action === 'tier') {
     const targetTier = options.tier
