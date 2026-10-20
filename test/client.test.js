@@ -752,3 +752,1218 @@ test('浮窗组件渲染一次不抛错：触发按钮与展开后的标题栏�
   const scroller = kids.find(kid => kid && kid.props && kid.props.style && kid.props.style.overflowY === 'auto')
   assert.equal(Boolean(scroller), true, '缺可滚动的正文容器')
 })
+
+test('增强版 Dialog：ack 勾选联动确认按钮禁用与守卫提示', () => {
+  // 1. 未勾选时：确认按钮应当被禁用（aria-disabled 为 true）
+  const { exported: clientDefault } = loadClient()
+  const treeDisabled = clientDefault.Dialog({
+    open: true,
+    title: '危险操作',
+    ack: '我已了解此操作影响',
+    yes: '确认执行',
+  })
+  const nodesDisabled = mount(treeDisabled)
+  const checkboxes = findAll(nodesDisabled, n => n.type === 'input' && n.props?.type === 'checkbox')
+  assert.equal(checkboxes.length, 1, '应渲染 ack 复选框')
+  const buttons = findAll(nodesDisabled, n => n.type === 'button')
+  const yesBtnDisabled = buttons.find(b => textOf(b).includes('确认执行'))
+  assert.equal(Boolean(yesBtnDisabled), true, '应渲染确认按钮')
+  assert.equal(yesBtnDisabled.props['aria-disabled'], 'true', '未勾选时确认按钮应处于禁用状态')
+
+  // 2. 勾选后（模拟 useState 返回 ackChecked = true）：确认按钮解锁
+  let callCount = 0
+  const { exported: clientChecked } = loadClient({}, {
+    useState: (initial) => {
+      callCount += 1
+      if (callCount === 1) return [true, () => {}] // ackChecked = true
+      return [initial, () => {}]
+    },
+  })
+  const treeEnabled = clientChecked.Dialog({
+    open: true,
+    title: '危险操作',
+    ack: '我已了解此操作影响',
+    yes: '确认执行',
+  })
+  const nodesEnabled = mount(treeEnabled)
+  const buttonsEnabled = findAll(nodesEnabled, n => n.type === 'button')
+  const yesBtnEnabled = buttonsEnabled.find(b => textOf(b).includes('确认执行'))
+  assert.equal(yesBtnEnabled.props['aria-disabled'], undefined, '勾选后确认按钮应解除禁用')
+})
+
+test('增强版 Dialog：confirmWord 精准字词匹配与把手校验', () => {
+  // 1. 输入未匹配时：确认按钮应被禁用
+  let callCount = 0
+  const { exported: clientMismatched } = loadClient({}, {
+    useState: (initial) => {
+      callCount += 1
+      if (callCount === 2) return ['错词', () => {}] // confirmInput
+      return [initial, () => {}]
+    },
+  })
+  const treeMismatch = clientMismatched.Dialog({
+    open: true,
+    title: '重置规则清单',
+    confirmWord: '重置',
+    yes: '确认重置',
+  })
+  const nodesMismatch = mount(treeMismatch)
+  const yesMismatch = findAll(nodesMismatch, n => n.type === 'button').find(b => textOf(b).includes('确认重置'))
+  assert.equal(yesMismatch.props['aria-disabled'], 'true', '输入不符时确认按钮应处于禁用状态')
+
+  // 2. 输入完全匹配时（含两端空白去除）：确认按钮解锁
+  callCount = 0
+  const { exported: clientMatched } = loadClient({}, {
+    useState: (initial) => {
+      callCount += 1
+      if (callCount === 2) return ['  重置  ', () => {}] // confirmInput trimmed === '重置'
+      return [initial, () => {}]
+    },
+  })
+  const treeMatched = clientMatched.Dialog({
+    open: true,
+    title: '重置规则清单',
+    confirmWord: '重置',
+    yes: '确认重置',
+  })
+  const nodesMatched = mount(treeMatched)
+  const yesMatched = findAll(nodesMatched, n => n.type === 'button').find(b => textOf(b).includes('确认重置'))
+  assert.equal(yesMatched.props['aria-disabled'], undefined, '输入完全匹配时确认按钮应解除禁用')
+})
+
+test('增强版 Dialog：consequence 风险分级与后果提示行正确渲染', () => {
+  const { exported } = loadClient()
+
+  // 可逆操作 (ok: true)
+  const treeOk = exported.Dialog({
+    open: true,
+    title: '切换模式',
+    consequence: { ok: true, text: '可以随时切回' },
+  })
+  const nodesOk = mount(treeOk)
+  const pOk = findAll(nodesOk, n => n.type === 'p' && typeof n.props?.className === 'string' && n.props.className.includes('bkl-consequence ok'))
+  assert.equal(pOk.length, 1, '应渲染 ok 等级的 consequence 提示')
+  assert.equal(textOf(pOk[0]).includes('可以随时切回'), true)
+
+  // 不可逆操作 (ok: false)
+  const treeDanger = exported.Dialog({
+    open: true,
+    title: '删除规则',
+    consequence: { ok: false, text: '此操作无法撤销' },
+  })
+  const nodesDanger = mount(treeDanger)
+  const pDanger = findAll(nodesDanger, n => n.type === 'p' && typeof n.props?.className === 'string' && n.props.className.includes('bkl-consequence danger'))
+  assert.equal(pDanger.length, 1, '应渲染 danger 等级的 consequence 提示')
+  assert.equal(textOf(pDanger[0]).includes('此操作无法撤销'), true)
+})
+
+test('StateBlock 状态块：统一承载 empty/error/loading/warn 四档布局与数据保护行', () => {
+  const { exported } = loadClient()
+
+  const tree = exported.StateBlock({
+    tone: 'error',
+    title: '规则清单损坏',
+    body: '已暂停写入以保护原数据。',
+    data: '正文文件仍在 bodies 目录下未被删除。',
+    actions: [exported.Button({ label: '重置' }, '重置')],
+  })
+  const nodes = mount(tree)
+
+  const root = findAll(nodes, n => n.props?.className && String(n.props.className).includes('bkl-state-error'))
+  assert.equal(root.length, 1, '应渲染带有 bkl-state-error 类名的容器')
+  assert.equal(root[0].props.role, 'alert', 'error 态角色应为 alert')
+
+  const titleNode = findAll(nodes, n => n.type === 'h3')
+  assert.equal(textOf(titleNode[0]), '规则清单损坏')
+
+  const dataNode = findAll(nodes, n => n.props?.className && String(n.props.className).includes('bkl-notice-data'))
+  assert.equal(dataNode.length, 1, '应渲染数据保护行')
+  assert.equal(textOf(dataNode[0]).includes('正文文件仍在 bodies 目录下未被删除。'), true)
+
+  const btnNode = findAll(nodes, n => n.type === 'button')
+  assert.equal(btnNode.length, 1, '应渲染操作按钮')
+})
+
+test('Notice 通报条升级：支持 tone 状态色阶、数据保护声明与操作行', () => {
+  const { exported } = loadClient()
+
+  const tree = exported.Notice({
+    tone: 'warn',
+    title: '预检阻断通知',
+    body: '检测到源码与补丁预期不一致。',
+    data: '没有写入任何文件。',
+  })
+  const nodes = mount(tree)
+
+  const root = findAll(nodes, n => n.props?.className && String(n.props.className).includes('bkl-notice-warn'))
+  assert.equal(root.length, 1, '应渲染带有 bkl-notice-warn 类名的容器')
+
+  const dataNode = findAll(nodes, n => n.props?.className && String(n.props.className).includes('bkl-notice-data'))
+  assert.equal(dataNode.length, 1, '应渲染数据保护行')
+  assert.equal(textOf(dataNode[0]).includes('没有写入任何文件。'), true)
+})
+
+test('Term 术语释义组件：支持 data-tip 悬浮属性与无障碍 note 角色', () => {
+  const { exported } = loadClient()
+
+  const tree = exported.Term({ termKey: 'host' })
+  const nodes = mount(tree)
+
+  assert.equal(nodes.type, 'span')
+  assert.equal(nodes.props.className, 'bkl-term')
+  assert.equal(nodes.props.tabIndex, 0, '需支持键盘 Tab 聚焦')
+  assert.equal(nodes.props.role, 'note', '无障碍角色需为 note')
+  assert.equal(typeof nodes.props['data-tip'], 'string', 'data-tip 应有释义内容')
+  assert.equal(nodes.props['data-tip'].length > 0, true)
+})
+
+test('PageTip 引导卡片：渲染页面指引与误区警示，点击收起触发隐藏与外部回调', () => {
+  const { exported } = loadClient()
+  let dismissedTarget = null
+  const tree = exported.PageTip({
+    page: 'patches',
+    onDismiss(target) { dismissedTarget = target },
+  })
+  const nodes = mount(tree)
+  assert.equal(nodes.props.role, 'region', 'PageTip 容器应为 region 角色')
+  assert.equal(typeof nodes.props['aria-label'], 'string', 'PageTip 需具备无障碍说明')
+  assert.equal(nodes.props.className.includes('bkl-tip'), true)
+
+  // 验证误区警示与主文案渲染
+  const pitfallNode = findAll(nodes, n => n.props?.className === 'bkl-tip-pitfall')[0]
+  assert.equal(Boolean(pitfallNode), true, '应渲染常见误区 span')
+  assert.equal(textOf(pitfallNode).length > 0, true)
+
+  // 验证收起按钮与点击通知
+  const closeBtn = findAll(nodes, n => n.type === 'button' && n.props?.className === 'bkl-tip-close')[0]
+  assert.equal(Boolean(closeBtn), true, '应渲染收起按钮')
+  assert.equal(typeof closeBtn.props['aria-label'], 'string')
+  closeBtn.props.onClick({ preventDefault() {} })
+  assert.equal(dismissedTarget, 'patches', '点击收起应向外部回传 target')
+
+  // 状态守卫：dismissed=true 或 tipOpen=false 或不存在的页面配置时返回 null
+  assert.equal(exported.PageTip({ page: 'patches', dismissed: true }), null)
+  assert.equal(exported.PageTip({ page: 'patches', tipOpen: false }), null)
+  assert.equal(exported.PageTip({ page: 'non-existent-page' }), null)
+
+  // 验证组件内部 hidden 状态响应：点击收起后下一次渲染返回 null
+  let hiddenState = false
+  const { exported: clientStateful } = loadClient({}, {
+    useState: (initial) => [hiddenState, (next) => { hiddenState = typeof next === 'function' ? next(hiddenState) : next }],
+  })
+  const mountedInitial = mount(clientStateful.PageTip({ page: 'rules', onDismiss() {} }))
+  assert.notEqual(mountedInitial, null)
+  const btn = findAll(mountedInitial, n => n.type === 'button' && n.props?.className === 'bkl-tip-close')[0]
+  btn.props.onClick({ preventDefault() {} })
+  assert.equal(hiddenState, true)
+  assert.equal(clientStateful.PageTip({ page: 'rules', onDismiss() {} }), null)
+})
+
+test('增强版 PageHead：生效时机图标化徽章渲染、自定义覆盖与 PageTip 集成', () => {
+  const { exported } = loadClient()
+
+  // 1. 预设生效时机徽章（以 patches 为例：refresh 图标与重启生效提示）
+  let dismissed = null
+  const treePatches = exported.PageHead({
+    page: 'patches',
+    title: '管理功能补丁',
+    desc: '控制补丁启闭',
+    titleId: 'patches-head-id',
+    onDismissTip(p) { dismissed = p },
+  })
+  const nodesPatches = mount(treePatches)
+  const h2 = findAll(nodesPatches, n => n.type === 'h2')[0]
+  assert.equal(h2.props.id, 'patches-head-id')
+  assert.equal(textOf(h2), '管理功能补丁')
+
+  const badgePatches = findAll(nodesPatches, n => n.props?.className === 'bkl-badge-effect')[0]
+  assert.equal(Boolean(badgePatches), true, '应渲染生效时机徽章')
+  const svgPatches = findAll(badgePatches, n => n.type === 'svg')
+  assert.equal(svgPatches.length, 1, '徽章内应渲染图标 SVG')
+  assert.equal(svgPatches[0].props.width, 13)
+  assert.equal(textOf(badgePatches).length > 0, true)
+
+  // 验证 PageHead 默认集成了 PageTip 并在点击收起时连通 onDismissTip
+  const tipNode = findAll(nodesPatches, n => n.props?.className && String(n.props.className).includes('bkl-tip'))[0]
+  assert.equal(Boolean(tipNode), true, '默认应集成并展示 PageTip')
+  const tipCloseBtn = findAll(tipNode, n => n.type === 'button' && n.props?.className === 'bkl-tip-close')[0]
+  tipCloseBtn.props.onClick({ preventDefault() {} })
+  assert.equal(dismissed, 'patches', '点击收起提示应透传至 onDismissTip 回调')
+
+  // 2. 自定义覆盖 effectIcon 与 when
+  const treeCustom = exported.PageHead({
+    page: 'custom',
+    title: '自定义页',
+    effectIcon: 'terminal',
+    when: '保存后即时生效',
+    tipOpen: false,
+  })
+  const nodesCustom = mount(treeCustom)
+  const badgeCustom = findAll(nodesCustom, n => n.props?.className === 'bkl-badge-effect')[0]
+  assert.equal(Boolean(badgeCustom), true)
+  assert.equal(textOf(badgeCustom).includes('保存后即时生效'), true)
+  assert.equal(findAll(nodesCustom, n => n.props?.className && String(n.props.className).includes('bkl-tip')).length, 0, 'tipOpen=false 时不渲染 PageTip')
+
+  // 3. overview 等无生效时机页面：不渲染徽章
+  const treeOverview = exported.PageHead({
+    page: 'overview',
+    title: '概览',
+    titleId: 'overview-id',
+  })
+  const nodesOverview = mount(treeOverview)
+  assert.equal(findAll(nodesOverview, n => n.props?.className === 'bkl-badge-effect').length, 0, '无生效时机时不应渲染徽章')
+})
+
+test('Term 术语释义组件：在页面状态卡与标题中的实际挂载与完整无障碍属性', () => {
+  let registration
+  let component
+  let stateIndex = 0
+  const fakeStatus = {
+    hostRoot: '/test-host',
+    target: { version: '0.9.0', commit: 'abc1234' },
+    mode: 'danger-full-access',
+    preflight: { ok: true, code: 'ok', blocked: [] },
+    inject: { ok: true },
+  }
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useState: (initial) => {
+      stateIndex += 1
+      if (stateIndex === 2) return [fakeStatus, () => {}] // 设置 status 使概览页完整展开
+      return [initial, () => {}]
+    },
+    useEffect() {},
+    useCallback: fn => fn,
+    useRef: current => ({ current }),
+  }
+  const sandbox = {
+    window: { __ModuleLoader__: { load(value) { registration = value } } },
+    document: { head: null, documentElement: { lang: 'en' }, getElementById() { return null } },
+    navigator: { language: 'en' },
+  }
+  vm.runInNewContext(fs.readFileSync(CLIENT, 'utf8'), sandbox)
+  const exported = registration.factory(() => react)
+  exported.apply({
+    effect(fn) { fn() },
+    slots: {
+      inject(_name, fn) { fn() },
+      register(metadata, value) {
+        if (metadata?.name === 'settings.section') component = value
+      },
+    },
+  })
+
+  // 1. 渲染实际设置分区页面（概览页挂载状态卡）
+  const pageTree = mount(component())
+  const pageTerms = findAll(pageTree, n => n.props?.className === 'bkl-term')
+  assert.equal(pageTerms.length >= 4, true, '概览页状态卡应挂载至少 4 个 Term 术语实例')
+
+  // 2. 在 PageHead 中挂载共用正文 Term
+  const headTree = mount(exported.PageHead({
+    page: 'prompt',
+    title: '正文管理',
+    desc: [exported.Term({ termKey: 'sharedPrompt' })],
+  }))
+  const headTerms = findAll(headTree, n => n.props?.className === 'bkl-term')
+  assert.equal(headTerms.length, 1, 'PageHead 描述应成功挂载 sharedPrompt Term')
+
+  // 3. 校验所有页面挂载的 Term 节点的无障碍契约
+  const allTerms = [...pageTerms, ...headTerms]
+  for (const term of allTerms) {
+    assert.equal(term.type, 'span', 'Term 应为 inline span')
+    assert.equal(term.props.role, 'note', '无障碍角色必须为 note')
+    assert.equal(term.props.tabIndex, 0, 'tabIndex 必须为 0 以支持键盘访问')
+    assert.equal(typeof term.props['data-tip'], 'string', 'data-tip 属性必须存在')
+    assert.equal(term.props['data-tip'].length > 0, true, 'data-tip 释义内容不能为空')
+    assert.equal(typeof term.props['aria-label'], 'string', 'aria-label 属性必须存在')
+    assert.equal(term.props['aria-label'].includes(term.props['data-tip']), true, 'aria-label 必须包含释义说明')
+  }
+})
+
+test('阶段三：flowSteps 4 阶段进度流纯函数建模', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  const { flowSteps } = exported
+  assert.equal(typeof flowSteps, 'function', 'flowSteps 必须被导出')
+
+  // 场景 1: 未配置宿主目录
+  const s1 = flowSteps({ hostRoot: null }, { rootMissing: true, enabledCount: 0, pendingFiles: 0, blocked: [] })
+  assert.equal(s1.length, 4)
+  assert.deepEqual(plain(s1[0]), ['配置宿主目录', 'current', '告诉插件源码在哪'])
+  assert.equal(s1[1][1], 'todo')
+  assert.equal(s1[2][1], 'todo')
+  assert.equal(s1[3][1], 'todo')
+
+  // 场景 2: 目录已就位，但尚未选择补丁
+  const s2 = flowSteps({ hostRoot: '/dsh' }, { rootMissing: false, enabledCount: 0, pendingFiles: 0, blocked: [] })
+  assert.deepEqual(plain(s2[0]), ['配置宿主目录', 'done', '已找到宿主源码'])
+  assert.deepEqual(plain(s2[1]), ['选择补丁', 'current', '还没有选择'])
+  assert.equal(s2[2][1], 'todo')
+  assert.equal(s2[3][1], 'todo')
+
+  // 场景 3: 已选 2 条补丁，待写入 3 个文件
+  const s3 = flowSteps({ hostRoot: '/dsh' }, { rootMissing: false, enabledCount: 2, pendingFiles: 3, blocked: [] })
+  assert.equal(s3[0][1], 'done')
+  assert.deepEqual(plain(s3[1]), ['选择补丁', 'done', '已选 2 条'])
+  assert.deepEqual(plain(s3[2]), ['检查并应用', 'current', '待写入 3 个文件'])
+  assert.equal(s3[3][1], 'todo')
+
+  // 场景 4: 预检阻断
+  const s4 = flowSteps({ hostRoot: '/dsh' }, { rootMissing: false, enabledCount: 2, pendingFiles: 0, blocked: [{ patchId: 'p1' }] })
+  assert.equal(s4[2][1], 'blocked')
+  assert.deepEqual(plain(s4[2]), ['检查并应用', 'blocked', '预检未通过，未写入'])
+
+  // 场景 5: 等待重启
+  const s5 = flowSteps({ hostRoot: '/dsh', restart: 'apply' }, { rootMissing: false, restartPending: true, enabledCount: 2, pendingFiles: 0, blocked: [] })
+  assert.equal(s5[2][1], 'done')
+  assert.deepEqual(plain(s5[3]), ['重启宿主', 'current', '等你按原方式重启'])
+
+  // 场景 6: 英文语言环境下输出纯英文字符串
+  const { exported: exportedEn } = loadClient({ document: { documentElement: { lang: 'en' } } })
+  const sEn = exportedEn.flowSteps({ hostRoot: '/dsh' }, { rootMissing: false, enabledCount: 1, pendingFiles: 1, blocked: [] })
+  assert.deepEqual(plain(sEn[0]), ['Configure host directory', 'done', 'Host source found'])
+  assert.deepEqual(plain(sEn[1]), ['Select patches', 'done', 'Selected 1 patch'])
+  assert.deepEqual(plain(sEn[2]), ['Check and apply', 'current', '1 file pending'])
+  assert.deepEqual(plain(sEn[3]), ['Restart host', 'todo', 'Pending patch application'])
+})
+
+test('阶段三：deriveActionCard 主行动卡片优先级判定与数据结构', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  const { deriveActionCard } = exported
+  assert.equal(typeof deriveActionCard, 'function', 'deriveActionCard 必须被导出')
+
+  // 1. 规则清单损坏优先级最高
+  const aCorrupt = deriveActionCard({}, { rulesIndex: 'corrupt', rootMissing: true, broken: true })
+  assert.equal(aCorrupt.tone, 'error')
+  assert.equal(aCorrupt.action, 'goRules')
+  assert.equal(aCorrupt.icon, 'alert')
+  assert.equal(aCorrupt.label, '需要先处理')
+  assert.equal(aCorrupt.title, '规则清单读不出来')
+
+  // 2. 状态记录损坏
+  const aBroken = deriveActionCard({}, { broken: true, rootMissing: true })
+  assert.equal(aBroken.tone, 'error')
+  assert.equal(aBroken.action, 'refresh')
+  assert.equal(aBroken.icon, 'alert')
+
+  // 3. 宿主目录未配置
+  const aRoot = deriveActionCard({}, { rootMissing: true, blocked: [] })
+  assert.equal(aRoot.tone, 'warn')
+  assert.equal(aRoot.action, 'configureRoot')
+  assert.equal(aRoot.icon, 'folder')
+  assert.equal(aRoot.label, '下一步 · 配置环境')
+
+  // 4. 预检阻断
+  const aBlocked = deriveActionCard({}, { rootMissing: false, blocked: [{ patchId: 'p' }] })
+  assert.equal(aBlocked.tone, 'error')
+  assert.equal(aBlocked.action, 'goPatches')
+  assert.equal(aBlocked.icon, 'alert')
+
+  // 5. 等待重启
+  const aRestart = deriveActionCard({ restart: 'apply' }, { restartPending: true, rootMissing: false, blocked: [] })
+  assert.equal(aRestart.tone, 'warn')
+  assert.equal(aRestart.action, 'restartHelp')
+  assert.equal(aRestart.icon, 'refresh')
+
+  // 6. 有待写入文件
+  const aPending = deriveActionCard({}, { pendingFiles: 2, enabledCount: 3, total: 3, rootMissing: false, blocked: [] })
+  assert.equal(aPending.action, 'goPatches')
+  assert.equal(aPending.icon, 'arrow')
+  assert.equal(aPending.label, '下一步 · 应用补丁')
+
+  // 7. 未选择补丁
+  const aNone = deriveActionCard({}, { pendingFiles: 0, enabledCount: 0, total: 3, rootMissing: false, blocked: [] })
+  assert.equal(aNone.action, 'goPatches')
+  assert.equal(aNone.icon, 'patch')
+  assert.equal(aNone.label, '按需选择')
+
+  // 8. 检查通过全部就位
+  const aDone = deriveActionCard({}, { pendingFiles: 0, enabledCount: 3, total: 3, rootMissing: false, blocked: [] })
+  assert.equal(aDone.tone, 'ok')
+  assert.equal(aDone.action, 'goPrompt')
+  assert.equal(aDone.icon, 'check')
+  assert.equal(aDone.label, '磁盘检查通过')
+})
+
+test('阶段三：formatDiagnostics 严格脱敏与尾段收敛', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  const { formatDiagnostics } = exported
+  assert.equal(typeof formatDiagnostics, 'function', 'formatDiagnostics 必须被导出')
+
+  const status = {
+    target: { version: '0.2.1-rc.2', commit: '687f282e8625abcdef' },
+    hostRoot: 'C:\\Users\\Administrator\\AppData\\Local\\Programs\\deepseek-harness',
+    http: { mounted: true },
+    rulesIndex: 'ok',
+    lock: { busy: false, operationId: 'secret-op-99', file: 'C:\\Users\\Administrator\\.dsh\\operation.lock' },
+    applied: { files: 3, operationId: 'tx-1' },
+    preflight: { code: 'ok' },
+  }
+
+  const text = formatDiagnostics(status, { rulesIndex: 'ok', applied: { files: 3 } })
+  assert.equal(typeof text, 'string')
+
+  // 1. 验证尾段路径收敛，绝对路径不得泄漏
+  assert.equal(text.includes('Administrator'), false, '不得泄漏 Windows 用户名 Administrator')
+  assert.equal(text.includes('AppData'), false, '不得泄漏中间目录 AppData')
+  assert.equal(text.includes('…/deepseek-harness'), true, '路径必须收敛为尾段 …/deepseek-harness')
+
+  // 2. 验证操作锁脱敏：不泄漏具体的 operationId
+  assert.equal(text.includes('secret-op-99'), false, '不得泄漏操作锁的 operationId')
+
+  // 3. 验证格式与关键字段存在
+  assert.equal(text.includes('宿主提交: 687f282e8625'), true)
+  assert.equal(text.includes('宿主根: …/deepseek-harness'), true)
+  assert.equal(text.includes('插件 HTTP: 已挂载'), true)
+  assert.equal(text.includes('规则清单: 可读'), true)
+  assert.equal(text.includes('操作锁: 空闲'), true)
+  assert.equal(text.includes('应用记录: 3 个文件'), true)
+  assert.equal(text.includes('补丁预检: ok'), true)
+  assert.equal(text.includes('运行行为: 未由此页面验证'), true)
+
+  // 4. 英文环境下验证
+  const { exported: exportedEn } = loadClient({ document: { documentElement: { lang: 'en' } } })
+  const textEn = exportedEn.formatDiagnostics(status, { rulesIndex: 'ok', applied: { files: 3 } })
+  assert.equal(textEn.includes('Host commit: 687f282e8625'), true)
+  assert.equal(textEn.includes('Host root: …/deepseek-harness'), true)
+  assert.equal(textEn.includes('Plugin HTTP: Mounted'), true)
+  assert.equal(textEn.includes('Rules index: Readable'), true)
+  assert.equal(textEn.includes('Operation lock: Idle'), true)
+  assert.equal(textEn.includes('Applied records: 3 files'), true)
+  assert.equal(textEn.includes('Patch preflight: ok'), true)
+  assert.equal(textEn.includes('Runtime behavior: Not verified by this page'), true)
+})
+
+test('重塑 OverviewPage：4阶段进度流、双栏卡片网格、核心配置清单与技术诊断脱敏折叠', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  const { OverviewPage } = exported
+  assert.equal(typeof OverviewPage, 'function', 'OverviewPage 必须被导出')
+
+  let actionRan = null
+  let toggledEnabled = null
+  let navigatedTab = null
+  let copiedText = null
+  let guideToggled = false
+
+  const fakeStatus = {
+    hostRoot: 'C:\\Users\\rumo\\dsh-host',
+    target: { version: '0.9.0', commit: 'abc1234' },
+    mode: 'danger-full-access',
+    enabled: true,
+    preflight: { ok: true, code: 'ok' },
+    inject: { ok: true },
+  }
+  const fakeF = {
+    rootMissing: false,
+    broken: false,
+    blocked: [],
+    mode: 'recommended',
+    rules: [{ id: 'r1', name: '日常规则', target: 'AGENTS.md' }],
+    activeRule: 'r1',
+    customPrompt: false,
+    enabledCount: 2,
+    pendingFiles: 1,
+    total: 5,
+    applied: { files: 2, updatedAt: Date.now() },
+    preCode: 'ok',
+  }
+  const fakeWords = {
+    phase: 'ready',
+    stale: false,
+    entries: [{ from: '原词', to: '替换词' }],
+  }
+
+  const vdom = OverviewPage({
+    f: fakeF,
+    status: fakeStatus,
+    override: null,
+    busy: false,
+    enabledPending: false,
+    restart: null,
+    restartView: null,
+    step: { tone: 'ok', title: '完成' },
+    words: fakeWords,
+    guideOpen: true,
+    onToggleGuide() { guideToggled = true },
+    onRun(action) { actionRan = action },
+    onGo(tab) { navigatedTab = tab },
+    onToggleEnabled(next) { toggledEnabled = next },
+    onCopy(text) { copiedText = text },
+    nextNotice: null,
+    overviewNotice: null,
+  })
+
+  const tree = mount(vdom)
+
+  // 1. 验证 4 阶段进度条（ol.bkl-flow）
+  const flowNode = findAll(tree, n => n.type === 'ol' && n.props?.className === 'bkl-flow')[0]
+  assert.equal(Boolean(flowNode), true, '应渲染 ol.bkl-flow 进度流')
+  const flowItems = findAll(flowNode, n => n.type === 'li')
+  assert.equal(flowItems.length, 4, '进度流应包含 4 个步骤')
+  assert.equal(flowItems[0].props.className, 'done')
+  assert.equal(flowItems[1].props.className, 'done')
+  assert.equal(flowItems[2].props.className, 'current')
+  assert.equal(flowItems[3].props.className, 'todo')
+
+  // 2. 验证双栏网格与主行动卡片（section.bkl-action-card）
+  const columnsNode = findAll(tree, n => n.props?.className === 'bkl-columns')[0]
+  assert.equal(Boolean(columnsNode), true, '应渲染双栏网格 bkl-columns')
+
+  const actionCard = findAll(columnsNode, n => n.type === 'section' && String(n.props?.className).includes('bkl-action-card'))[0]
+  assert.equal(Boolean(actionCard), true, '左栏应渲染主行动卡片')
+  const actionBtn = findAll(actionCard, n => n.type === 'button')[0]
+  actionBtn.props.onClick({ preventDefault() {} })
+  assert.equal(actionRan, 'goPatches', '点击主行动卡片按钮应触发 action')
+
+  // 3. 验证首次向导（支持折叠）
+  const guideCard = findAll(columnsNode, n => n.props?.className && String(n.props.className).includes('bkl-card') || n.type === 'section')
+    .find(c => textOf(c).includes('三步走完'))
+  assert.equal(Boolean(guideCard), true, '首次向导卡片应存在')
+
+  // 4. 验证核心配置清单（div.bkl-summary-list，Switch 就地切换）
+  const summaryList = findAll(columnsNode, n => n.props?.className === 'bkl-summary-list')[0]
+  assert.equal(Boolean(summaryList), true, '应渲染核心配置清单 bkl-summary-list')
+  const summaryRows = findAll(summaryList, n => n.props?.className === 'bkl-summary-row')
+  assert.equal(summaryRows.length, 4, '配置清单应包含 4 行')
+
+  const takeoverSwitch = findAll(summaryList, n => n.type === 'button' && n.props?.role === 'switch')[0]
+  assert.equal(Boolean(takeoverSwitch), true, '应渲染破限接管开关')
+  takeoverSwitch.props.onClick({ preventDefault() {} })
+  assert.equal(toggledEnabled, false, '点击开关应就地切换')
+
+  // 5. 验证右栏环境与权限卡片（div.bkl-status-lines）
+  const statusLines = findAll(columnsNode, n => n.props?.className === 'bkl-status-lines')[0]
+  assert.equal(Boolean(statusLines), true, '右栏应渲染环境权限行 bkl-status-lines')
+
+  // 6. 验证生效时机指南卡片
+  const effectCard = findAll(columnsNode, n => n.type === 'section')
+    .find(c => textOf(c).includes('改动什么时候生效？'))
+  assert.equal(Boolean(effectCard), true, '应渲染生效时机指南卡片')
+
+  // 7. 验证技术诊断折叠块（details.bkl-disclosure、一键复制按钮与提示）
+  const disclosure = findAll(columnsNode, n => n.type === 'details' && n.props?.className === 'bkl-disclosure')[0]
+  assert.equal(Boolean(disclosure), true, '应渲染技术诊断折叠块')
+  assert.equal(textOf(disclosure).includes('含本机路径，不含凭据'), true, '应展示不含凭据提示')
+  const copyBtn = findAll(disclosure, n => n.type === 'button').find(b => textOf(b).includes('复制诊断信息'))
+  assert.equal(Boolean(copyBtn), true, '应渲染复制诊断信息按钮')
+  copyBtn.props.onClick({ preventDefault() {} })
+  assert.equal(typeof copiedText === 'string' && copiedText.includes('宿主根: …/dsh-host'), true, '点击应触发一键复制脱敏文本')
+})
+
+test('重塑 PatchesPage：已选数量徽章、阻断/未配目录 Notice、分界标题、补丁列表高光/胶囊/模式门禁与悬浮底部栏', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  const { PatchesPage } = exported
+  assert.equal(typeof PatchesPage, 'function', 'PatchesPage 必须被导出')
+
+  let toggledId = null
+  let toggledNext = null
+  let applied = false
+  let reverted = false
+  let runAction = null
+  let navigatedTab = null
+  let copiedText = null
+
+  const fakePatches = [
+    { id: 'output.trim', title: '保留输出', human: '减少遗漏', enabled: true, targets: [{ path: 'p1.ts' }] },
+    { id: 'minimal.unfreeze', title: '精简解锁', human: '解除冻结', enabled: false, unrestricted: true, targets: [{ path: 'p2.ts' }] },
+  ]
+  const fakeF = {
+    rootMissing: false,
+    broken: false,
+    mode: 'recommended', // 推荐模式下 minimal.unfreeze 应置灰门禁
+    total: 2,
+    enabledCount: 1,
+    pendingFiles: 1,
+    findings: [{ patchId: 'output.trim', state: 'pending' }],
+    blocked: [],
+    patches: fakePatches,
+    applied: { files: 1 },
+  }
+
+  const vdom = PatchesPage({
+    f: fakeF,
+    patchInfo: { files: 1 },
+    patchError: null,
+    busy: false,
+    toggles: {},
+    onToggle(id, next) { toggledId = id; toggledNext = next },
+    onApply() { applied = true },
+    onRevert() { reverted = true },
+    onRun(action) { runAction = action },
+    onCopy(text) { copiedText = text },
+    onGo(tab) { navigatedTab = tab },
+    noticeView: null,
+    restartView: null,
+  })
+
+  const tree = mount(vdom)
+
+  // 1. 验证顶部已选数量徽章
+  const selectedBadge = findAll(tree, n => n.type === 'span' && textOf(n).includes('已选 1 条'))[0]
+  assert.equal(Boolean(selectedBadge), true, 'PageHead 顶部应渲染已选数量徽章')
+
+  // 2. 验证分界标题（.bkl-section-label）
+  const sectionLabel = findAll(tree, n => n.props?.className === 'bkl-section-label')[0]
+  assert.equal(Boolean(sectionLabel), true, '应渲染 .bkl-section-label 小标题')
+  assert.equal(textOf(sectionLabel).includes('源码补丁'), true)
+  assert.equal(textOf(sectionLabel).includes('当前提示词模式：推荐'), true)
+
+  // 3. 验证补丁统一外壳（section.bkl-patch-list）
+  const patchList = findAll(tree, n => n.type === 'section' && n.props?.className === 'bkl-patch-list')[0]
+  assert.equal(Boolean(patchList), true, '应渲染 section.bkl-patch-list 容器')
+
+  // 4. 验证补丁行项（article.bkl-patch-row）
+  const rows = findAll(patchList, n => n.type === 'article' && String(n.props?.className).includes('bkl-patch-row'))
+  assert.equal(rows.length, 2, '应渲染 2 行补丁')
+
+  // 第一行：output.trim（开启 -> 带 .selected）
+  const row1 = rows[0]
+  assert.equal(row1.props.className.includes('selected'), true, '开启的补丁应带有 .selected 高光类名')
+  const iconWrap1 = findAll(row1, n => n.props?.className === 'bkl-patch-icon')[0]
+  assert.equal(Boolean(iconWrap1), true, '应渲染特征图标容器')
+  const tagPending = findAll(row1, n => n.type === 'span' && textOf(n).includes('待写入'))[0]
+  assert.equal(Boolean(tagPending), true, '应渲染待写入状态胶囊徽章')
+
+  // 第二行：minimal.unfreeze（推荐模式门禁 -> 带 .inactive）
+  const row2 = rows[1]
+  assert.equal(row2.props.className.includes('inactive'), true, '推荐模式下的 minimal.unfreeze 应置灰带 .inactive')
+  const unfreezeBadge = findAll(row2, n => n.type === 'span' && textOf(n).includes('仅完全解放'))[0]
+  assert.equal(Boolean(unfreezeBadge), true, '应展示仅完全解放徽章')
+  const modeLink = findAll(row2, n => n.type === 'button' && textOf(n).includes('切换模式后可选'))[0]
+  assert.equal(Boolean(modeLink), true, '应展示模式跳转链接')
+  modeLink.props.onClick({ preventDefault() {} })
+  assert.equal(navigatedTab, 'prompt', '点击跳转链接应导向 prompt 页')
+
+  // 折叠改动说明与涉及文件清单
+  const rowDisclosure = findAll(row1, n => n.type === 'details' && n.props?.className === 'bkl-disclosure')[0]
+  assert.equal(Boolean(rowDisclosure), true, '每行应具备 details.bkl-disclosure 改动说明折叠')
+  const fileList = findAll(rowDisclosure, n => n.props?.className === 'bkl-file-list')[0]
+  assert.equal(Boolean(fileList), true, '展开后应包含涉及文件清单 bkl-file-list')
+
+  // 5. 验证悬浮固定底部操作栏（footer.bkl-sticky-footer）
+  const footer = findAll(tree, n => n.type === 'footer' && n.props?.className === 'bkl-sticky-footer')[0]
+  assert.equal(Boolean(footer), true, '应渲染悬浮固定底部操作栏 footer.bkl-sticky-footer')
+  const footCopy = findAll(footer, n => n.props?.className && String(n.props.className).includes('bkl-foot-copy'))[0]
+  assert.equal(textOf(footCopy).includes('预计写入 1 个文件'), true, '底部左侧应展示预计写入文件数')
+
+  const buttons = findAll(footer, n => n.type === 'button')
+  const revertBtn = buttons.find(b => textOf(b).includes('回退'))
+  const applyBtn = buttons.find(b => textOf(b).includes('写入 1 个文件') || textOf(b).includes('检查并应用') || textOf(b).includes('应用'))
+  assert.equal(Boolean(revertBtn), true, '应渲染回退按钮')
+  assert.equal(Boolean(applyBtn), true, '应渲染应用按钮')
+  revertBtn.props.onClick({ preventDefault() {} })
+  applyBtn.props.onClick({ preventDefault() {} })
+  assert.equal(reverted, true, '点击回退应触发 onRevert')
+  assert.equal(applied, true, '点击应用应触发 onApply')
+})
+
+test('阶段四：两档模式权衡卡片（mode-grid）要点与预算渲染，切换时横向对比表（compare）结构与参数对比', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  assert.equal(typeof exported.ModeBlock, 'function', 'ModeBlock 必须被导出')
+
+  // 1. 验证 ModeBlock 渲染两档模式卡片网格（.mode-grid）
+  let pickedMode = null
+  const tree = mount(exported.ModeBlock({
+    mode: 'recommended',
+    onPick(id) { pickedMode = id },
+  }))
+
+  const grid = findAll(tree, n => n.props?.className && String(n.props.className).includes('mode-grid'))[0]
+  assert.equal(Boolean(grid), true, '应渲染 .mode-grid 模式卡片网格')
+
+  const cards = findAll(grid, n => n.props?.className && String(n.props.className).includes('mode-card'))
+  assert.equal(cards.length, 2, '应渲染两档模式卡片')
+
+  // 推荐模式卡片：选中态、权衡要点与预算
+  const recCard = cards.find(c => textOf(c).includes('推荐') || c.props?.['data-mode'] === 'recommended')
+  assert.equal(Boolean(recCard), true, '应包含推荐模式卡片')
+  assert.equal(String(recCard.props?.className).includes('selected') || recCard.props?.['aria-pressed'] === 'true' || recCard.props?.['aria-pressed'] === true, true, '推荐模式卡片应为选中态')
+  const recBudget = findAll(recCard, n => n.props?.className && String(n.props.className).includes('mode-budget'))[0]
+  assert.equal(Boolean(recBudget), true, '推荐卡片应包含预算信息 .mode-budget')
+  assert.equal(textOf(recBudget).includes('20 分钟') || textOf(recBudget).includes('0.5 MB'), true, '推荐卡片预算应体现 20 分钟或 0.5 MB')
+
+  // 完全解放卡片：未选中态、预算
+  const unrCard = cards.find(c => textOf(c).includes('完全解放') || c.props?.['data-mode'] === 'unrestricted')
+  assert.equal(Boolean(unrCard), true, '应包含完全解放模式卡片')
+  const unrBudget = findAll(unrCard, n => n.props?.className && String(n.props.className).includes('mode-budget'))[0]
+  assert.equal(Boolean(unrBudget), true, '完全解放卡片应包含预算信息 .mode-budget')
+  assert.equal(textOf(unrBudget).includes('9,999') || textOf(unrBudget).includes('9999') || textOf(unrBudget).includes('1 MB'), true, '完全解放卡片预算应体现 9,999 秒或 1 MB')
+
+  // 点击完全解放卡片触发 onPick
+  unrCard.props.onClick?.({ preventDefault() {} })
+  assert.equal(pickedMode, 'unrestricted', '点击卡片应触发 onPick')
+
+  // 2. 验证切换时的横向对比表（.compare）结构与参数对比
+  assert.equal(typeof exported.ModeCompare, 'function', 'ModeCompare 必须被导出')
+  const compareTree = mount(exported.ModeCompare({
+    currentMode: 'recommended',
+    targetMode: 'unrestricted',
+  }))
+  const compare = findAll(compareTree, n => n.props?.className && String(n.props.className).includes('compare'))[0]
+  assert.equal(Boolean(compare), true, '应渲染 .compare 横向对比表容器')
+  const compareText = textOf(compare)
+  assert.equal(compareText.includes('项目'), true, '对比表应包含项目列标题')
+  assert.equal(compareText.includes('现在') && compareText.includes('推荐'), true, '对比表应包含当前推荐模式列标题')
+  assert.equal(compareText.includes('切换后') && compareText.includes('完全解放'), true, '对比表应包含切换后完全解放模式列标题')
+  assert.equal(compareText.includes('命令超时') || compareText.includes('超时'), true, '对比表应包含超时对比项')
+  assert.equal(compareText.includes('20 分钟') && (compareText.includes('9,999') || compareText.includes('9999')), true, '对比表应对比 20 分钟与 9999 秒')
+  assert.equal(compareText.includes('输出') || compareText.includes('深度'), true, '对比表应包含工具输出与深度对比项')
+  assert.equal(compareText.includes('约束'), true, '对比表应包含自我约束对比项')
+  assert.equal(compareText.includes('保留') && compareText.includes('解除'), true, '对比表应对比保留与解除')
+})
+
+test('阶段四：Prompt 编辑器脏状态（dirty）高亮、字数/字节数精确计算与动态原因反馈', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  assert.equal(typeof exported.PromptBlock, 'function', 'PromptBlock 必须被导出')
+
+  // 1. 未修改态（clean）
+  const cleanTree = mount(exported.PromptBlock({
+    override: { text: 'hello', userFileExists: true, bytes: 5, effective: { ok: true } },
+    promptError: null,
+    draft: null,
+    setDraft() {},
+    busy: false,
+    onSave() {},
+    onReset() {},
+    onDiscard() {},
+    onCopy() {},
+    onRetry() {},
+    noticeView: null,
+  }))
+
+  const cleanCard = findAll(cleanTree, n => n.props?.className && String(n.props.className).includes('editor-card'))[0] || cleanTree
+  assert.equal(String(cleanCard.props?.className || '').includes('dirty'), false, '未修改时编辑器卡片不应有 .dirty 类名')
+
+  // 2. 脏状态（dirty）：卡片高亮、字数与 UTF-8 字节数精确计算、未保存徽章与动态原因反馈
+  let discarded = false
+  const dirtyTree = mount(exported.PromptBlock({
+    override: { text: 'hello', userFileExists: true, bytes: 5, effective: { ok: true } },
+    promptError: null,
+    draft: '你好世界', // 4 字符，UTF-8 编码下每个汉字 3 字节，共 12 字节
+    setDraft() {},
+    busy: false,
+    onSave() {},
+    onReset() {},
+    onDiscard() { discarded = true },
+    onCopy() {},
+    onRetry() {},
+    noticeView: null,
+  }))
+
+  const dirtyCard = findAll(dirtyTree, n => n.props?.className && String(n.props.className).includes('dirty'))[0]
+  assert.equal(Boolean(dirtyCard), true, '有修改时编辑器卡片应带有 .dirty 高光类名')
+
+  // 字数与字节数精确统计（字数 · 字节数）
+  const countNode = findAll(dirtyTree, n => n.props?.id === 'prompt-count' || (n.props?.style && textOf(n).includes('字')))[0]
+  assert.equal(Boolean(countNode), true, '应渲染统计节点')
+  const countText = textOf(countNode)
+  assert.equal(countText.includes('4 字') && countText.includes('12 字节'), true, '字数与 UTF-8 字节数应精确计算为 4 字 · 12 字节')
+
+  // 脏状态徽章与原因反馈
+  const dirtyBadge = findAll(dirtyTree, n => textOf(n).includes('未保存') || textOf(n).includes('改动'))[0]
+  assert.equal(Boolean(dirtyBadge), true, '应展示未保存改动提示徽章')
+  const reasonNode = findAll(dirtyTree, n => n.props?.id === 'prompt-reason' || n.props?.id === 'bkl-prompt-why')[0]
+  assert.equal(Boolean(reasonNode), true, '应渲染原因反馈节点')
+  assert.equal(textOf(reasonNode).includes('保存后') && textOf(reasonNode).includes('下一轮'), true, '动态原因反馈应说明保存后从下一轮对话生效')
+
+  // 放弃修改按钮
+  const discardBtn = findAll(dirtyTree, n => n.type === 'button' && textOf(n).includes('放弃'))[0]
+  assert.equal(Boolean(discardBtn), true, '脏状态下应提供放弃修改按钮')
+  discardBtn.props.onClick({ preventDefault() {} })
+  assert.equal(discarded, true, '点击放弃修改应触发 onDiscard')
+})
+
+test('阶段四：规则页清单损坏（corrupt）与空态 StateBlock 居中渲染、文件路径透明度与数据安全声明', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  assert.equal(typeof exported.RulesBlock, 'function', 'RulesBlock 必须被导出')
+
+  let recovered = false
+  let newClicked = false
+
+  // 1. 损坏态（corrupt）：使用 StateBlock(tone: 'error') 居中渲染、包含文件路径透明度 disclosure 与数据安全声明
+  const corruptTree = mount(exported.RulesBlock({
+    rules: [],
+    activeRule: null,
+    rulesIndex: 'corrupt',
+    rulesIndexPath: 'breaklimit/rules.json',
+    selectedId: null,
+    body: { id: null, status: 'idle', text: '' },
+    edit: null,
+    busy: false,
+    onNew() { newClicked = true },
+    onOpen() {},
+    onEdit() {},
+    onEditChange() {},
+    onSave() {},
+    onCancelEdit() {},
+    onActivate() {},
+    onDeactivate() {},
+    onDelete() {},
+    onRecover() { recovered = true },
+    onRetryBody() {},
+    noticeView: null,
+  }))
+
+  const corruptState = findAll(corruptTree, n => n.props?.className && String(n.props.className).includes('bkl-state-error'))[0]
+  assert.equal(Boolean(corruptState), true, '清单损坏时应使用 StateBlock(error) 居中承载')
+
+  // 数据安全声明
+  const dataProtect = findAll(corruptState, n => n.props?.className && String(n.props.className).includes('bkl-notice-data'))[0]
+  assert.equal(Boolean(dataProtect), true, '应包含数据安全声明行')
+  assert.equal(textOf(dataProtect).includes('bodies') && (textOf(dataProtect).includes('没有被删除') || textOf(dataProtect).includes('未被删除')), true, '数据安全行应声明 bodies 目录下的正文未被删除')
+
+  // 文件路径透明度
+  const pathDisclosure = findAll(corruptState, n => n.type === 'details' || (n.props?.className && String(n.props.className).includes('path')))[0]
+  assert.equal(Boolean(pathDisclosure), true, '应包含涉及文件位置透明度折叠或路径展示')
+  const corruptAllText = textOf(corruptState)
+  assert.equal(corruptAllText.includes('rules.json') && corruptAllText.includes('bodies'), true, '应透明展示 rules.json 与 bodies/ 路径')
+
+  // 重置操作按钮
+  const recoverBtn = findAll(corruptState, n => n.type === 'button' && textOf(n).includes('备份并重置'))[0]
+  assert.equal(Boolean(recoverBtn), true, '应提供备份并重置清单操作按钮')
+  recoverBtn.props.onClick({ preventDefault() {} })
+  assert.equal(recovered, true, '点击应触发 onRecover')
+
+  // 2. 空态（empty）：无规则且清单正常时，使用 StateBlock 居中引导
+  const emptyTree = mount(exported.RulesBlock({
+    rules: [],
+    activeRule: null,
+    rulesIndex: 'ok',
+    rulesIndexPath: 'breaklimit/rules.json',
+    selectedId: null,
+    body: { id: null, status: 'idle', text: '' },
+    edit: null,
+    busy: false,
+    onNew() { newClicked = true },
+    onOpen() {},
+    onEdit() {},
+    onEditChange() {},
+    onSave() {},
+    onCancelEdit() {},
+    onActivate() {},
+    onDeactivate() {},
+    onDelete() {},
+    onRecover() {},
+    onRetryBody() {},
+    noticeView: null,
+  }))
+
+  const emptyState = findAll(emptyTree, n => n.props?.className && String(n.props.className).includes('bkl-state-empty'))[0] ||
+                     findAll(emptyTree, n => n.props?.className && String(n.props.className).includes('bkl-state'))[0]
+  assert.equal(Boolean(emptyState), true, '无规则且清单正常时应渲染空态 StateBlock')
+  const newFirstBtn = findAll(emptyState, n => n.type === 'button' && textOf(n).includes('新建'))[0]
+  assert.equal(Boolean(newFirstBtn), true, '空态中应提供新建规则入口')
+  newFirstBtn.props.onClick({ preventDefault() {} })
+  assert.equal(newClicked, true, '点击新建按钮应触发 onNew')
+})
+
+test('阶段四：规则删除安全把手（ack 勾选解锁）与损坏清单重置安全把手（confirmWord 精确输入解锁）', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  assert.equal(typeof exported.ruleDeleteDialogSpec, 'function', 'ruleDeleteDialogSpec 必须被导出')
+  assert.equal(typeof exported.recoverRulesDialogSpec, 'function', 'recoverRulesDialogSpec 必须被导出')
+
+  // 1. 规则删除安全把手（ack 勾选联动）
+  const fakeRule = { id: 'test-rule', name: '测试规则', target: 'AGENTS.md' }
+  const deleteSpec = exported.ruleDeleteDialogSpec(fakeRule, false)
+  assert.equal(typeof deleteSpec?.ack === 'string' && deleteSpec.ack.length > 0, true, '删除规则弹窗必须包含 ack 确认把手文本')
+  assert.equal(deleteSpec?.consequence?.ok, false, '删除规则后果必须为不可逆 (ok: false)')
+  assert.equal(typeof deleteSpec?.consequence?.text === 'string' && deleteSpec.consequence.text.length > 0, true, '删除规则后果必须说明不可撤销后果')
+
+  // 未勾选 ack 时：确认按钮禁用
+  const treeDelDisabled = mount(exported.Dialog({
+    open: true,
+    title: deleteSpec.title,
+    ack: deleteSpec.ack,
+    consequence: deleteSpec.consequence,
+    yes: deleteSpec.yes,
+  }))
+  const delYesDisabled = findAll(treeDelDisabled, n => n.type === 'button').find(b => textOf(b).includes(deleteSpec.yes))
+  assert.equal(delYesDisabled.props['aria-disabled'], 'true', '未勾选 ack 时确认删除按钮应处于禁用状态')
+
+  // 勾选 ack 后：确认按钮解锁
+  let ackCount = 0
+  const { exported: clientAckChecked } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } }, {
+    useState: (initial) => {
+      ackCount += 1
+      if (ackCount === 1) return [true, () => {}] // ackChecked = true
+      return [initial, () => {}]
+    },
+  })
+  const treeDelEnabled = mount(clientAckChecked.Dialog({
+    open: true,
+    title: deleteSpec.title,
+    ack: deleteSpec.ack,
+    consequence: deleteSpec.consequence,
+    yes: deleteSpec.yes,
+  }))
+  const delYesEnabled = findAll(treeDelEnabled, n => n.type === 'button').find(b => textOf(b).includes(deleteSpec.yes))
+  assert.equal(delYesEnabled.props['aria-disabled'], undefined, '勾选 ack 后确认删除按钮应解除禁用')
+
+  // 2. 损坏清单重置安全把手（confirmWord 精确输入联动）
+  const recoverSpec = exported.recoverRulesDialogSpec()
+  assert.equal(recoverSpec?.confirmWord, '重置', '损坏清单重置弹窗必须要求输入确认词「重置」')
+  assert.equal(recoverSpec?.consequence?.ok, false, '重置清单后果必须为不可逆 (ok: false)')
+
+  // 输入未匹配时：确认按钮禁用
+  let wordCount = 0
+  const { exported: clientWordMismatch } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } }, {
+    useState: (initial) => {
+      wordCount += 1
+      if (wordCount === 2) return ['错误词', () => {}]
+      return [initial, () => {}]
+    },
+  })
+  const treeRecDisabled = mount(clientWordMismatch.Dialog({
+    open: true,
+    title: recoverSpec.title,
+    confirmWord: recoverSpec.confirmWord,
+    consequence: recoverSpec.consequence,
+    yes: recoverSpec.yes,
+  }))
+  const recYesDisabled = findAll(treeRecDisabled, n => n.type === 'button').find(b => textOf(b).includes(recoverSpec.yes))
+  assert.equal(recYesDisabled.props['aria-disabled'], 'true', '输入不符时确认重置按钮应处于禁用状态')
+
+  // 输入完全匹配时（含空白去除）：确认按钮解锁
+  wordCount = 0
+  const { exported: clientWordMatched } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } }, {
+    useState: (initial) => {
+      wordCount += 1
+      if (wordCount === 2) return ['  重置  ', () => {}]
+      return [initial, () => {}]
+    },
+  })
+  const treeRecEnabled = mount(clientWordMatched.Dialog({
+    open: true,
+    title: recoverSpec.title,
+    confirmWord: recoverSpec.confirmWord,
+    consequence: recoverSpec.consequence,
+    yes: recoverSpec.yes,
+  }))
+  const recYesEnabled = findAll(treeRecEnabled, n => n.type === 'button').find(b => textOf(b).includes(recoverSpec.yes))
+  assert.equal(recYesEnabled.props['aria-disabled'], undefined, '精准输入「重置」后确认重置按钮应解除禁用')
+})
+
+test('阶段五收官：词库页双栏响应式布局、长词优先本地替换与命中药丸（wordChips）渲染、搜索过滤与清除联动', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  assert.equal(typeof exported.WordsPage, 'function', 'WordsPage 必须被导出')
+
+  // 1. 双栏响应式布局与长词优先本地替换
+  const testEntries = [
+    { from: 'AI', to: '人工智能' },
+    { from: 'OpenAI', to: '开源人工' },
+    { from: 'DeepSeek', to: '深度求索' },
+  ]
+  const dummyStore = {
+    phase: 'ready',
+    stale: false,
+    entries: testEntries,
+    limits: { maxEntries: 100, maxTerm: 64 },
+    lastHits: 0,
+    saving: false,
+  }
+
+  let cleared = false
+  const tree = mount(exported.WordsPage({
+    store: dummyStore,
+    query: '',
+    setQuery: (q) => { if (q === '') cleared = true },
+    previewText: 'Hello OpenAI and DeepSeek!',
+    setPreviewText: () => {},
+    onAdd: () => {},
+    onEdit: () => {},
+    onDelete: () => {},
+    onRetryRead: () => {},
+    onReturnChat: () => {},
+    canReturn: true,
+  }))
+
+  // 双栏结构断言：主栏（列表）与侧栏（预览）
+  const mainSection = findAll(tree, n => n.type === 'section' && n.props?.['aria-labelledby'] === 'bkl-words-list-title')[0]
+  assert.equal(Boolean(mainSection), true, '主栏必须为带无障碍标题的词条列表区')
+  const asideSection = findAll(tree, n => n.type === 'aside' && n.props?.['aria-labelledby'] === 'bkl-words-preview-title')[0]
+  assert.equal(Boolean(asideSection), true, '侧栏必须为带无障碍标题的本地替换预览区')
+
+  // 长词优先替换断言
+  const previewBox = findAll(asideSection, n => n.type === 'pre')[0]
+  assert.equal(Boolean(previewBox), true, '预览区必须包含输出代码块')
+  const previewOut = textOf(previewBox)
+  assert.equal(previewOut.includes('开源人工'), true, '长词 OpenAI 必须优先替换为 开源人工')
+  assert.equal(previewOut.includes('深度求索'), true, '长词 DeepSeek 必须优先替换为 深度求索')
+  assert.equal(previewOut.includes('Open人工智能'), false, '短词 AI 绝不可抢先替换破坏长词 OpenAI')
+
+  // 命中药丸（wordChips）渲染断言
+  const chipsWrap = findAll(asideSection, n => n.props?.style?.flexDirection === 'column')[0]
+  assert.equal(Boolean(chipsWrap), true, '命中词条时必须渲染 wordChips 药丸容器')
+  const chipsText = textOf(chipsWrap)
+  assert.equal(chipsText.includes('OpenAI → 开源人工'), true, '命中药丸必须包含 OpenAI 映射')
+  assert.equal(chipsText.includes('DeepSeek → 深度求索'), true, '命中药丸必须包含 DeepSeek 映射')
+  assert.equal(chipsText.includes('AI → 人工智能'), false, '未命中的短词 AI 不得出现在命中药丸中')
+
+  // 2. 搜索过滤与清除联动
+  const searchTree = mount(exported.WordsPage({
+    store: dummyStore,
+    query: 'deep',
+    setQuery: (q) => { if (q === '') cleared = true },
+    previewText: '',
+    setPreviewText: () => {},
+    onAdd: () => {},
+    onEdit: () => {},
+    onDelete: () => {},
+    onRetryRead: () => {},
+    onReturnChat: () => {},
+    canReturn: false,
+  }))
+
+  const rows = findAll(searchTree, n => n.type === 'li' && textOf(n).includes('→'))
+  assert.equal(rows.length, 1, '搜索 deep 时列表中应仅展示 1 项匹配项')
+  assert.equal(textOf(rows[0]).includes('DeepSeek'), true, '展示项应为 DeepSeek')
+
+  // 清除按钮联动
+  const clearBtn = findAll(searchTree, n => n.type === 'button' && (textOf(n) === '×' || textOf(n).includes('清除')))[0]
+  assert.equal(Boolean(clearBtn), true, '输入搜索词后工具栏必须出现清除按钮')
+  clearBtn.props.onClick({ preventDefault() {} })
+  assert.equal(cleared, true, '点击清除按钮应触发 setQuery("")')
+})
+
+test('阶段五收官：词库容量守卫（100 条上限 Notice/禁用）与输入 64 字符边界校验', () => {
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } })
+  const fullEntries = Array.from({ length: 100 }, (_, i) => ({
+    from: `term${String(i).padStart(3, '0')}`,
+    to: `target${String(i).padStart(3, '0')}`,
+  }))
+  const fullStore = {
+    phase: 'ready',
+    stale: false,
+    entries: fullEntries,
+    limits: { maxEntries: 100, maxTerm: 64 },
+    lastHits: 0,
+    saving: false,
+  }
+
+  const fullTree = mount(exported.WordsPage({
+    store: fullStore,
+    query: '',
+    setQuery: () => {},
+    previewText: '',
+    setPreviewText: () => {},
+    onAdd: () => {},
+    onEdit: () => {},
+    onDelete: () => {},
+    onRetryRead: () => {},
+    onReturnChat: () => {},
+    canReturn: false,
+  }))
+
+  // 1. 添加按钮在满额 100 条时处于禁用状态
+  const addButtons = findAll(fullTree, n => n.type === 'button' && textOf(n).includes('添加词条'))
+  assert.equal(addButtons.length > 0, true, '应存在添加词条按钮')
+  const addBtn = addButtons[0]
+  const isOff = addBtn.props?.off === true || addBtn.props?.['aria-disabled'] === 'true' || addBtn.props?.disabled === true
+  assert.equal(isOff, true, '达到 100 条上限时添加词条按钮必须处于禁用状态')
+
+  // 2. 满额 100 条时渲染容量守卫 Notice 通报条
+  const notices = findAll(fullTree, n => n.props?.className && String(n.props.className).includes('bkl-notice'))
+  const limitNotice = notices.find(n => textOf(n).includes('100 条上限') || textOf(n).includes('已达到 100 条上限'))
+  assert.equal(Boolean(limitNotice), true, '达到 100 条上限时必须渲染容量守卫 Notice 通报条')
+  assert.equal(textOf(limitNotice).includes('仍可编辑或删除已有词条'), true, '容量守卫 Notice 必须明确告知仍可编辑或删除已有词条')
+
+  // 3. 已有词条的编辑与删除保持可用
+  const editButtons = findAll(fullTree, n => n.type === 'button' && textOf(n).includes('编辑'))
+  const delButtons = findAll(fullTree, n => n.type === 'button' && textOf(n).includes('删除'))
+  assert.equal(editButtons.length > 0, true, '已有词条必须渲染编辑按钮')
+  assert.equal(delButtons.length > 0, true, '已有词条必须渲染删除按钮')
+  assert.equal(editButtons[0].props?.off, undefined, '达到上限时不应禁用已有词条的编辑功能')
+  assert.equal(delButtons[0].props?.off, undefined, '达到上限时不应禁用已有词条的删除功能')
+
+  // 4. 输入 64 字符边界与容量校验
+  const term64A = 'A'.repeat(64)
+  const term64B = 'B'.repeat(64)
+  const validErrors = exported.wordEntryErrors(term64A, term64B, { entries: [], maxTerm: 64, maxEntries: 100 })
+  assert.equal(validErrors.from, '', '64 字符原词应合法通过')
+  assert.equal(validErrors.to, '', '64 字符替换词应合法通过')
+
+  const term65A = 'A'.repeat(65)
+  const overflowAErrors = exported.wordEntryErrors(term65A, term64B, { entries: [], maxTerm: 64, maxEntries: 100 })
+  assert.equal(Boolean(overflowAErrors.from), true, '65 字符原词必须触发超限错误')
+
+  const term65B = 'B'.repeat(65)
+  const overflowBErrors = exported.wordEntryErrors(term64A, term65B, { entries: [], maxTerm: 64, maxEntries: 100 })
+  assert.equal(Boolean(overflowBErrors.to), true, '65 字符替换词必须触发超限错误')
+
+  // 5. 满 100 条时新增报错，编辑已有放行
+  const newLimitErrors = exported.wordEntryErrors('newTerm', 'newTarget', {
+    entries: fullEntries,
+    maxEntries: 100,
+    maxTerm: 64,
+    originalFrom: null,
+  })
+  assert.equal(Boolean(newLimitErrors.limit), true, '满 100 条时新增词条必须触发 limit 上限错误')
+
+  const editLimitErrors = exported.wordEntryErrors('term000', 'newTarget', {
+    entries: fullEntries,
+    maxEntries: 100,
+    maxTerm: 64,
+    originalFrom: 'term000',
+  })
+  assert.equal(editLimitErrors.limit, '', '满 100 条时编辑已有词条必须允许保存，不触发 limit 错误')
+})
+
+test('阶段五收官：会话浮窗微窗口（dockPanel）外观、标题栏模式微徽章、快速卡片切换、前 3 条微预览截断与底部直达导航', () => {
+  let useStateCalls = 0
+  const { exported } = loadClient({ document: { documentElement: { lang: 'zh-CN' } } }, {
+    useState: (initial) => {
+      useStateCalls += 1
+      if (useStateCalls === 6) return [true, () => {}] // open = true
+      return [typeof initial === 'function' ? initial() : initial, () => {}]
+    },
+  })
+
+  // 构造 5 条词条以断言截断只展示前 3 条
+  const fiveEntries = [
+    { from: 'entry1', to: 'target1' },
+    { from: 'entry2', to: 'target2' },
+    { from: 'entry3', to: 'target3' },
+    { from: 'entry4', to: 'target4' },
+    { from: 'entry5', to: 'target5' },
+  ]
+  exported.aliasStore.state.entries = fiveEntries
+  exported.aliasStore.state.phase = 'ready'
+
+  const tree = mount(exported.AliasRow({}))
+  const dialogs = findAll(tree, n => n.props && n.props.role === 'dialog')
+  assert.equal(dialogs.length, 1, '浮窗展开时必须渲染一个 role="dialog" 窗口')
+  const panel = dialogs[0]
+
+  // 1. 标题栏：包含标题、模式微徽章、关闭按钮
+  const titlebar = findAll(panel, n => n.props?.style?.cursor === 'move')[0]
+  assert.equal(Boolean(titlebar), true, '微窗口必须包含可拖拽标题栏')
+  const titleText = textOf(titlebar)
+  assert.equal(titleText.includes('破限快捷设置'), true, '标题栏必须包含破限快捷设置标题')
+  assert.equal(titleText.includes('推荐模式') || titleText.includes('完全解放模式'), true, '标题栏必须包含当前模式微徽章')
+
+  // 2. 快速卡片切换与说明
+  const modeButtons = findAll(panel, n => n.type === 'button' && (textOf(n).includes('推荐') || textOf(n).includes('完全解放')))
+  assert.equal(modeButtons.length >= 2, true, '微窗口内必须包含推荐模式与完全解放模式两档快速切换卡片')
+  const panelAllText = textOf(panel)
+  assert.equal(panelAllText.includes('切换前会确认影响，下一轮生效，不改变沙箱权限。'), true, '必须渲染 dockModeHint 模式影响说明')
+
+  // 3. 前 3 条微预览截断与管理全部词条
+  const listItems = findAll(panel, n => n.type === 'li' && textOf(n).includes('→'))
+  assert.equal(listItems.length, 3, '5 条词条时微窗口词表应严格截断仅显示前 3 条')
+  assert.equal(panelAllText.includes('entry1 → target1'), true, '前 3 条必须包含 entry1')
+  assert.equal(panelAllText.includes('entry3 → target3'), true, '前 3 条必须包含 entry3')
+  assert.equal(panelAllText.includes('entry4 → target4'), false, '超出 3 条的 entry4 绝不应在微窗口列表中渲染')
+  assert.equal(panelAllText.includes('仅显示前 3 条，完整 5 条请前往词库管理。'), true, '多于 3 条时必须渲染 dockAliasLimitHint 截断提示')
+
+  // 输入区域默认说明文案
+  assert.equal(panelAllText.includes('原词与替换词各最多 64 字符。'), true, '单行输入区域下方必须包含 dockAliasInlineDefault 字符说明')
+
+  // 管理全部词条入口
+  const manageAllBtn = findAll(panel, n => n.type === 'button' && textOf(n).includes('管理全部词条'))[0]
+  assert.equal(Boolean(manageAllBtn), true, '词表区域必须提供「管理全部词条」直达按钮')
+
+  // 4. 底部直达导航与页脚提示
+  assert.equal(panelAllText.includes('Esc 关闭 · 每次改动单独保存'), true, '页脚必须渲染 dockFooterHint 提示')
+  const openSettingsBtn = findAll(panel, n => n.type === 'button' && textOf(n).includes('打开完整设置'))[0]
+  assert.equal(Boolean(openSettingsBtn), true, '页脚必须提供「打开完整设置」直达按钮')
+})
+

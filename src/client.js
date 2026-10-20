@@ -96,10 +96,38 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     fontSection: "15px",
     fontLabel: "13px",
     fontHelp: "12px",
+    fontMicro: "11px",
+
+    // 状态细边框（用于徽章、渐变高光卡片边缘、虚线引导框）
+    accentLine: "var(--dsw-alias-state-business-secondary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 32%, transparent))",
+    okLine: "var(--dsw-alias-state-success-secondary, color-mix(in srgb, var(--dsw-alias-state-success-primary) 32%, transparent))",
+    warnLine: "var(--dsw-alias-state-warn-secondary, color-mix(in srgb, var(--dsw-alias-state-warn-primary) 36%, transparent))",
+    errorLine: "var(--dsw-alias-state-error-secondary, color-mix(in srgb, var(--dsw-alias-state-error-primary) 32%, transparent))",
+
+    // 交互前景色与反色层
+    onDanger: "var(--dsw-alias-button-danger-foreground, #ffffff)",
+    tooltipBg: "var(--dsw-alias-bg-inverse, var(--dsw-alias-label-primary))",
+    tooltipText: "var(--dsw-alias-label-inverse, var(--dsw-alias-bg-base))",
+    toastIcon: "var(--dsw-alias-state-success-primary)",
+    overlay: "color-mix(in srgb, #000 48%, transparent)",
+    scrollShade: "color-mix(in srgb, #000 16%, transparent)",
+
+    // 空间层级阴影系统
+    shadowSm: "0 1px 2px color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent), 0 2px 8px color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent)",
+    shadowPop: "0 24px 60px -12px color-mix(in srgb, #000 35%, transparent), 0 0 0 1px var(--dsw-alias-border-l1)",
+    shadowUp: "0 -8px 20px -12px color-mix(in srgb, #000 25%, transparent)",
+    knobShadow: "0 1px 2px color-mix(in srgb, #000 25%, transparent)",
+
+    gapField: "14px",
+    gapLabel: "6px",
+    gapBlock: "24px",
+    padCard: "18px",
+    padRow: "14px",
   }
 
   const TONE_COLOR = { ok: tk.ok, warn: tk.warn, error: tk.error, info: tk.accent, accent: tk.accent, idle: tk.line4 }
   const TONE_SOFT = { ok: tk.okSoft, warn: tk.warnSoft, error: tk.errorSoft, info: tk.accentSoft, accent: tk.accentSoft, idle: tk.well }
+  const TONE_LINE = { ok: tk.okLine, warn: tk.warnLine, error: tk.errorLine, info: tk.accentLine, accent: tk.accentLine, idle: tk.line2 }
   const DISK_TONE = { pending: "accent", ready: "ok", blocked: "error", skipped: "idle", unknown: "idle" }
   const STEP_TONE = { done: "ok", todo: "accent", warn: "warn", error: "error" }
 
@@ -113,6 +141,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     stamp: { font: tk.fontSmall, color: tk.caption, whiteSpace: "nowrap" },
 
     // 每页顶部：页面标题是这一屏的第一眼，应用名只在顶栏出现一次。
+    pageHeadWrap: { display: "flex", flexDirection: "column", gap: "12px", minWidth: 0 },
     pageHead: { display: "flex", alignItems: "flex-start", gap: "12px", minWidth: 0 },
     pageHeadText: { display: "flex", flexDirection: "column", gap: "4px", flex: "1 1 auto", minWidth: 0 },
     pageTitle: { margin: 0, fontSize: tk.fontPage, lineHeight: 1.35, fontWeight: 650, letterSpacing: "-0.3px", color: tk.label },
@@ -120,7 +149,23 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     whenTag: {
       flexShrink: 0, alignSelf: "center", padding: "2px 9px", borderRadius: "999px",
       border: `0.5px solid ${tk.line2}`, background: tk.well, fontSize: tk.fontHelp,
-      color: tk.label3, whiteSpace: "nowrap",
+      color: tk.label3, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center",
+    },
+    pageTip: {
+      display: "flex", alignItems: "flex-start", gap: "11px",
+      padding: "11px 12px 11px 14px", marginBottom: "4px",
+      border: `1px dashed ${tk.line2}`, borderRadius: tk.rMd,
+      background: tk.layer1, fontSize: tk.fontLabel, color: tk.label2,
+    },
+    pageTipIcon: { color: tk.accent, marginTop: "2px", flexShrink: 0 },
+    pageTipContent: { flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" },
+    pageTipLead: { color: tk.label, fontWeight: 600, marginRight: "6px" },
+    pageTipText: { color: tk.label2 },
+    pageTipPitfall: { display: "block", marginTop: "3px", color: tk.caption, fontSize: tk.fontHelp },
+    pageTipClose: {
+      margin: "-3px -4px -3px 0", padding: "4px", background: "transparent",
+      border: "none", cursor: "pointer", color: tk.caption, borderRadius: "4px",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
     },
 
     tablist: { display: "flex", columnGap: "24px", overflowX: "auto", scrollbarWidth: "thin", borderBottom: `0.5px solid ${tk.line2}` },
@@ -330,26 +375,243 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     wordChip: { padding: "4px 8px", borderRadius: tk.rXs, background: tk.accentSoft, color: tk.accent, font: tk.fontSmall, overflowWrap: "anywhere" },
     wordCounter: { font: tk.fontSmall, color: tk.caption, whiteSpace: "nowrap" },
     wordEditorFields: { display: "flex", flexDirection: "column", gap: "12px" },
+
+    // Dialog 增强
+    dialogIcon: {
+      display: "grid", placeItems: "center", width: "32px", height: "32px",
+      borderRadius: tk.rSm, background: tk.accentSoft, color: tk.accent, flexShrink: 0,
+    },
+    dialogIconDanger: { background: tk.errorSoft, color: tk.error },
+    consequence: {
+      display: "flex", alignItems: "flex-start", gap: "8px", margin: "4px 0 0",
+      fontSize: tk.fontHelp, fontWeight: 600,
+    },
+    consequenceDanger: { color: tk.error },
+    consequenceOk: { color: tk.ok },
+    ackLabel: {
+      display: "flex", alignItems: "flex-start", gap: "10px", margin: "4px 0 0",
+      padding: "10px 12px", border: `1px solid ${tk.warn}`, background: tk.warnSoft,
+      borderRadius: tk.rSm, fontSize: tk.fontLabel, cursor: "pointer",
+    },
+    ackDanger: { border: `1px solid ${tk.error}`, background: tk.errorSoft },
+    ackChecked: { border: `1px solid ${tk.ok}`, background: tk.okSoft },
+    ackInput: { margin: "3px 0 0", width: "15px", height: "15px", flexShrink: 0 },
+    ackText: { color: tk.label, lineHeight: 1.4 },
+    confirmWordBox: { display: "flex", flexDirection: "column", gap: "6px", margin: "4px 0 0" },
+    confirmWordLabel: { fontSize: tk.fontHelp, color: tk.label2 },
+    confirmWordTarget: { fontFamily: tk.mono, color: tk.error, padding: "0 4px", background: tk.errorSoft, borderRadius: tk.rXs },
+    confirmWordInput: { maxWidth: "260px", fontFamily: tk.mono },
+
+    // StateBlock 居中四态
+    stateBlock: {
+      display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
+      gap: "8px", padding: "40px 24px 36px", borderRadius: tk.rMd, background: tk.layer1,
+      border: `1px solid ${tk.line2}`,
+    },
+    stateEmpty: { border: `1px dashed ${tk.line3}`, background: "transparent" },
+    stateWarn: { border: `1px solid ${tk.warn}`, background: tk.warnSoft },
+    stateError: { border: `1px solid ${tk.error}`, background: tk.errorSoft },
+    stateLoading: { border: `1px solid ${tk.accent}`, background: tk.accentSoft },
+    stateCompact: { padding: "20px 16px", border: "none", background: "transparent" },
+    stateIcon: {
+      width: "48px", height: "48px", borderRadius: tk.rMd, display: "grid", placeItems: "center",
+      background: tk.accentSoft, color: tk.accent, marginBottom: "4px",
+    },
+    stateIconError: { background: tk.errorSoft, color: tk.error },
+    stateIconWarn: { background: tk.warnSoft, color: tk.warn },
+    stateTitle: { margin: 0, fontSize: tk.fontSection, fontWeight: 650, color: tk.label },
+    stateBody: { margin: 0, fontSize: tk.font, color: tk.label2, maxWidth: "46ch" },
+    stateActions: { display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap", marginTop: "12px" },
+    stateExtra: { width: "100%", maxWidth: "520px", textAlign: "left", marginTop: "14px" },
+
+    // Notice 左右分栏升级
+    noticeBox: {
+      display: "flex", alignItems: "flex-start", gap: "12px", padding: "12px 14px",
+      borderRadius: tk.rSm, background: tk.well, border: `0.5px solid ${tk.line2}`,
+      borderLeft: `3px solid ${tk.line4}`,
+    },
+    noticeInfo: { borderLeft: `3px solid ${tk.accent}`, background: tk.accentSoft },
+    noticeWarn: { borderLeft: `3px solid ${tk.warn}`, background: tk.warnSoft },
+    noticeError: { borderLeft: `3px solid ${tk.error}`, background: tk.errorSoft },
+    noticeSuccess: { borderLeft: `3px solid ${tk.ok}`, background: tk.okSoft },
+    noticeLoading: { borderLeft: `3px solid ${tk.accent}`, background: tk.accentSoft },
+    noticeIconBox: {
+      width: "26px", height: "26px", borderRadius: "50%", display: "grid", placeItems: "center",
+      flexShrink: 0, background: tk.layer1, border: `0.5px solid ${tk.line2}`,
+    },
+    noticeGrow: { flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "4px" },
+    noticeHeadRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" },
+    noticeTitle: { margin: 0, font: tk.fontStrong, lineHeight: "24px" },
+    noticeBodyText: { margin: 0, font: tk.fontSmall, color: tk.label2 },
+    noticeDataCenter: { display: "inline-flex", alignItems: "center", gap: "6px", margin: "4px 0 0", font: tk.fontSmall, color: tk.label },
+    noticeDataLeft: { display: "inline-flex", alignItems: "center", gap: "6px", margin: "4px 0 0", font: tk.fontSmall, color: tk.label },
+    noticeActionRow: { display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" },
+
+    // Term
+    term: {
+      borderBottom: `1px dashed ${tk.line4}`, cursor: "help", position: "relative",
+      display: "inline", textDecoration: "none", outlineOffset: "2px",
+    },
+    spinner: {
+      display: "inline-block", width: "18px", height: "18px", border: `2px solid ${tk.accent}`,
+      borderRightColor: "transparent", borderRadius: "50%", animation: "bkl-spin 0.8s linear infinite",
+    },
+    spinnerSm: {
+      display: "inline-block", width: "13px", height: "13px", border: `2px solid currentColor`,
+      borderRightColor: "transparent", borderRadius: "50%", animation: "bkl-spin 0.8s linear infinite",
+    },
   }
 
   // 只放伪类与动效：内联样式做不到 :hover / :focus-visible / 减弱动态。背景类
   // 规则带 !important，是因为内联样式的优先级高于样式表。焦点环沿用宿主
   // ui-theme/focus.css 的写法，指针操作时宿主会把 --dsw-focus-ring-color 置成透明。
   const SCOPED_CSS = [
-    ".bkl-root :focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }",
+    ".bkl-root :focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }",
     // 弹窗的遮罩只能走样式表：内联样式写不出 ::backdrop。
-    ".bkl-root .bkl-dialog::backdrop { background: color-mix(in srgb, #000 45%, transparent); }",
-    ".bkl-root .bkl-btn, .bkl-root .bkl-tab, .bkl-root .bkl-hover, .bkl-root .bkl-radio, .bkl-root .bkl-switch { transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease; }",
-    ".bkl-root .bkl-btn-plain:not([aria-disabled=\"true\"]):hover, .bkl-root .bkl-hover:hover { background-color: var(--dsw-alias-interactive-bg-hover) !important; }",
-    ".bkl-root .bkl-btn-fill:not([aria-disabled=\"true\"]):hover { opacity: 0.88; }",
+    ".bkl-root .bkl-dialog::backdrop { background: color-mix(in srgb, #000 48%, transparent); }",
+    ".bkl-root .bkl-dialog[open] { animation: bkl-pop 160ms cubic-bezier(0.16, 1, 0.3, 1); }",
+    ".bkl-root .bkl-btn, .bkl-root .bkl-tab, .bkl-root .bkl-hover, .bkl-root .bkl-radio, .bkl-root .bkl-switch { transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease, box-shadow 120ms ease; }",
+    ".bkl-root .bkl-btn-plain:not([aria-disabled=\"true\"]):hover, .bkl-root .bkl-hover:hover { background-color: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent)) !important; }",
+    ".bkl-root .bkl-btn-fill:not([aria-disabled=\"true\"]):hover { opacity: 0.90; filter: brightness(1.05); }",
     ".bkl-root .bkl-tab:hover { color: var(--dsw-alias-label-primary) !important; }",
     ".bkl-root .bkl-radio:not([aria-checked=\"true\"]):hover { border-color: var(--dsw-alias-border-l4) !important; }",
     ".bkl-root .bkl-knob { transition: transform 120ms ease; }",
-    ".bkl-root .bkl-input:focus { border-color: var(--dsw-alias-border-l4) !important; }",
+    ".bkl-root .bkl-input:focus { border-color: var(--dsw-alias-state-business-primary) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, transparent); outline: none; }",
+    ".bkl-root .bkl-input[aria-invalid=\"true\"] { border-color: var(--dsw-alias-state-error-primary) !important; background-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent); }",
+    ".bkl-root .bkl-input[aria-invalid=\"true\"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-state-error-primary) 24%, transparent); }",
     ".bkl-root .bkl-input::placeholder { color: var(--dsw-alias-label-caption); }",
+    // 术语 Tooltip
+    ".bkl-root .bkl-term { border-bottom: 1px dashed var(--dsw-alias-label-tertiary); cursor: help; position: relative; display: inline; text-decoration: none; }",
+    ".bkl-root .bkl-term:hover::after, .bkl-root .bkl-term:focus-visible::after { content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 6px); width: max-content; max-width: min(280px, 72vw); padding: 8px 12px; border-radius: var(--dsw-radius-md, 8px); background: var(--dsw-alias-bg-inverse, var(--dsw-alias-label-primary)); color: var(--dsw-alias-label-inverse, var(--dsw-alias-bg-base)); font: var(--dsw-font-xxs-12, 12px/1.55 var(--dsw-font-mono, sans-serif)); font-weight: 400; letter-spacing: 0; white-space: normal; text-align: left; text-transform: none; word-break: break-word; z-index: 60; box-shadow: 0 16px 48px color-mix(in srgb, #000 35%, transparent); pointer-events: none; animation: bkl-fade 120ms ease-out; }",
+    "html[data-guide=\"off\"] .bkl-root .bkl-term { border-bottom: none; cursor: inherit; }",
+    "html[data-guide=\"off\"] .bkl-root .bkl-term::after { display: none !important; }",
+    // 居中状态块
+    ".bkl-root .bkl-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 40px 24px; border-radius: var(--dsw-radius-lg, 12px); border: 1px dashed var(--dsw-alias-border-l3); background: var(--dsw-alias-bg-layer-1); }",
+    ".bkl-root .bkl-state.error { border-style: solid; border-color: var(--dsw-alias-state-error-secondary, color-mix(in srgb, var(--dsw-alias-state-error-primary) 32%, transparent)); background: linear-gradient(180deg, color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent), var(--dsw-alias-bg-layer-1) 75%); }",
+    ".bkl-root .bkl-state.warn { border-style: solid; border-color: var(--dsw-alias-state-warn-secondary, color-mix(in srgb, var(--dsw-alias-state-warn-primary) 36%, transparent)); background: linear-gradient(180deg, color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent), var(--dsw-alias-bg-layer-1) 75%); }",
+    ".bkl-root .bkl-state.loading { border-style: solid; border-color: var(--dsw-alias-state-business-secondary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 32%, transparent)); background: linear-gradient(180deg, color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent), var(--dsw-alias-bg-layer-1) 75%); }",
+    // 页面提示条 (PageTip)
+    ".bkl-root .bkl-tip { display: flex; align-items: flex-start; gap: 11px; padding: 11px 12px 11px 14px; margin-bottom: 4px; border: 1px dashed var(--dsw-alias-border-l3, #cbd5e1); border-radius: var(--dsw-radius-md, 8px); background: var(--dsw-alias-bg-layer-1); font-size: 13px; color: var(--dsw-alias-label-secondary); }",
+    ".bkl-root .bkl-tip-icon { color: var(--dsw-alias-state-business-primary, #3b82f6); margin-top: 2px; flex-shrink: 0; }",
+    ".bkl-root .bkl-tip-content { flex: 1 1 auto; min-width: 0; }",
+    ".bkl-root .bkl-tip-lead { color: var(--dsw-alias-label-primary); font-weight: 600; margin-right: 6px; }",
+    ".bkl-root .bkl-tip-pitfall { display: block; margin-top: 3px; color: var(--dsw-alias-label-caption); font-size: 12px; }",
+    ".bkl-root .bkl-tip-close { margin: -3px -4px -3px 0; padding: 4px; background: transparent; border: none; cursor: pointer; color: var(--dsw-alias-label-caption); border-radius: 4px; }",
+    ".bkl-root .bkl-tip-close:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent)); }",
+    "html[data-guide=\"off\"] .bkl-root .bkl-tip { display: none !important; }",
+    // 动画
     ".bkl-root .bkl-fade { animation: bkl-fade 160ms ease-out; }",
+    ".bkl-root .bkl-pop { animation: bkl-pop 160ms cubic-bezier(0.16, 1, 0.3, 1); }",
     "@keyframes bkl-fade { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }",
+    "@keyframes bkl-pop { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }",
+    "@keyframes bkl-spin { to { transform: rotate(360deg); } }",
     "@media (prefers-reduced-motion: reduce) { .bkl-root *, .bkl-root *::before, .bkl-root *::after { animation: none !important; transition: none !important; } }",
+
+    // ---- 阶段三样式 --------------------------------------------------------
+    // 4 阶段进度流
+    ".bkl-root .bkl-flow { list-style: none; margin: 0 0 24px; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }",
+    ".bkl-root .bkl-flow li { --tone: var(--dsw-alias-border-l2); padding: 10px 12px 0; border-top: 3px solid var(--tone); display: flex; gap: 9px; align-items: flex-start; min-width: 0; }",
+    ".bkl-root .bkl-flow .bkl-flow-num { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; border: 1px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-bg-layer-1); }",
+    ".bkl-root .bkl-flow .bkl-flow-num svg { width: 13px; height: 13px; stroke-width: 2.4; }",
+    ".bkl-root .bkl-flow strong { display: block; font-size: 13px; font-weight: 600; color: var(--dsw-alias-label-secondary); line-height: 22px; }",
+    ".bkl-root .bkl-flow span.bkl-sub { display: block; font-size: 11px; color: var(--dsw-alias-label-tertiary); overflow-wrap: anywhere; }",
+    ".bkl-root .bkl-flow li.done { --tone: var(--dsw-alias-state-success-primary); }",
+    ".bkl-root .bkl-flow li.done .bkl-flow-num { background: var(--dsw-alias-state-success-primary); border-color: var(--dsw-alias-state-success-primary); color: var(--dsw-alias-label-primary-foreground, #ffffff); }",
+    ".bkl-root .bkl-flow li.current { --tone: var(--dsw-alias-state-business-primary); }",
+    ".bkl-root .bkl-flow li.current .bkl-flow-num { border-color: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-state-business-tertiary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)); box-shadow: 0 0 0 3px var(--dsw-alias-state-business-tertiary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 16%, transparent)); }",
+    ".bkl-root .bkl-flow li.current strong { color: var(--dsw-alias-label-primary); }",
+    ".bkl-root .bkl-flow li.blocked { --tone: var(--dsw-alias-state-error-primary); }",
+    ".bkl-root .bkl-flow li.blocked .bkl-flow-num { border-color: var(--dsw-alias-state-error-primary); background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent); color: var(--dsw-alias-state-error-primary); }",
+    ".bkl-root .bkl-flow li.blocked strong, .bkl-root .bkl-flow li.blocked span.bkl-sub { color: var(--dsw-alias-state-error-primary); }",
+    ".bkl-root .bkl-flow li.todo { --tone: var(--dsw-alias-border-l2); }",
+    ".bkl-root .bkl-flow li.todo strong { color: var(--dsw-alias-label-tertiary); }",
+    "@media (max-width: 640px) { .bkl-root .bkl-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }",
+
+    // 响应式双栏网格
+    ".bkl-root .bkl-columns { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 24px; align-items: start; }",
+    "@media (max-width: 840px) { .bkl-root .bkl-columns { grid-template-columns: minmax(0, 1fr); } }",
+
+    // 主行动卡片
+    ".bkl-root .bkl-action-card { --tone: var(--dsw-alias-state-business-primary); --toneSoft: var(--dsw-alias-state-business-tertiary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent)); --toneLine: var(--dsw-alias-state-business-secondary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 32%, transparent)); padding: 24px 26px; border: 1px solid var(--toneLine); border-radius: var(--dsw-radius-lg, 12px); position: relative; overflow: hidden; background: linear-gradient(160deg, var(--toneSoft), var(--dsw-alias-bg-layer-1) 62%); }",
+    ".bkl-root .bkl-action-card::before { content: \"\"; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tone); }",
+    ".bkl-root .bkl-action-card.warn { --tone: var(--dsw-alias-state-warn-primary); --toneSoft: var(--dsw-alias-state-warn-tertiary, color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent)); --toneLine: var(--dsw-alias-state-warn-secondary, color-mix(in srgb, var(--dsw-alias-state-warn-primary) 36%, transparent)); }",
+    ".bkl-root .bkl-action-card.error { --tone: var(--dsw-alias-state-error-primary); --toneSoft: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); --toneLine: var(--dsw-alias-state-error-secondary, color-mix(in srgb, var(--dsw-alias-state-error-primary) 32%, transparent)); }",
+    ".bkl-root .bkl-action-card.ok { --tone: var(--dsw-alias-state-success-primary); --toneSoft: var(--dsw-alias-state-success-tertiary, color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent)); --toneLine: var(--dsw-alias-state-success-secondary, color-mix(in srgb, var(--dsw-alias-state-success-primary) 32%, transparent)); }",
+    ".bkl-root .bkl-action-eyebrow { display: flex; align-items: center; gap: 8px; color: var(--tone); font-size: 12px; font-weight: 650; }",
+    ".bkl-root .bkl-action-eyebrow .bkl-icon-wrap { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--dsw-alias-bg-layer-1); box-shadow: 0 0 0 1px var(--toneLine); flex-shrink: 0; }",
+    ".bkl-root .bkl-action-card h2 { font-size: 20px; margin: 12px 0 6px; letter-spacing: -0.3px; font-weight: 650; color: var(--dsw-alias-label-primary); }",
+    ".bkl-root .bkl-action-card p { font-size: 13px; color: var(--dsw-alias-label-secondary); max-width: 60ch; line-height: 1.6; margin: 0; }",
+    ".bkl-root .bkl-action-card .bkl-action-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 20px; }",
+
+    // 核心配置清单
+    ".bkl-root .bkl-summary-list { display: flex; flex-direction: column; }",
+    ".bkl-root .bkl-summary-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l2); }",
+    ".bkl-root .bkl-summary-row:last-child { border-bottom: none; padding-bottom: 0; }",
+    ".bkl-root .bkl-summary-row:first-child { padding-top: 0; }",
+    ".bkl-root .bkl-summary-icon { color: var(--dsw-alias-label-tertiary); margin-top: 2px; flex-shrink: 0; }",
+    ".bkl-root .bkl-summary-content { flex: 1 1 auto; min-width: 0; }",
+    ".bkl-root .bkl-summary-label { font-size: 12px; color: var(--dsw-alias-label-tertiary); margin-bottom: 1px; }",
+    ".bkl-root .bkl-summary-row strong { font-size: 13px; font-weight: 600; color: var(--dsw-alias-label-primary); }",
+    ".bkl-root .bkl-summary-row p { font-size: 12px; color: var(--dsw-alias-label-secondary); margin-top: 2px; }",
+
+    // 环境权限卡片
+    ".bkl-root .bkl-status-lines { font-size: 12px; display: grid; gap: 12px; }",
+    ".bkl-root .bkl-status-lines > div { display: flex; align-items: center; gap: 8px; justify-content: space-between; }",
+    ".bkl-root .bkl-status-lines .bkl-status-key { color: var(--dsw-alias-label-secondary); font-weight: 550; }",
+
+    // 补丁统一外壳与行样式
+    ".bkl-root .bkl-patch-list { border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md, 8px); overflow: clip; background: var(--dsw-alias-bg-layer-1); }",
+    ".bkl-root .bkl-patch-row { padding: 14px 20px; border-bottom: 0.5px solid var(--dsw-alias-border-l2); position: relative; transition: background 120ms ease; }",
+    ".bkl-root .bkl-patch-row:last-child { border-bottom: none; }",
+    ".bkl-root .bkl-patch-row.selected { background: linear-gradient(90deg, var(--dsw-alias-state-business-tertiary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent)), var(--dsw-alias-bg-layer-1) 28%); }",
+    ".bkl-root .bkl-patch-row.selected::before { content: \"\"; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--dsw-alias-state-business-primary); }",
+    ".bkl-root .bkl-patch-row.inactive { background: var(--dsw-alias-bg-layer-2, color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent)); opacity: 0.72; }",
+    ".bkl-root .bkl-patch-row.inactive h3, .bkl-root .bkl-patch-row.inactive p { color: var(--dsw-alias-label-tertiary); }",
+    ".bkl-root .bkl-patch-icon { padding: 8px; border-radius: var(--dsw-radius-md, 8px); background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }",
+    ".bkl-root .bkl-patch-row.selected .bkl-patch-icon { color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-bg-layer-1); border-color: var(--dsw-alias-state-business-secondary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 32%, transparent)); }",
+
+    // 悬浮固定底部操作栏
+    ".bkl-root .bkl-sticky-footer { position: sticky; bottom: 0; z-index: 10; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 16px; background: var(--dsw-alias-bg-layer-1); border-top: 0.5px solid var(--dsw-alias-border-l2); box-shadow: 0 -8px 20px -12px color-mix(in srgb, #000 25%, transparent); margin-top: 24px; border-radius: 0 0 var(--dsw-radius-md, 8px) var(--dsw-radius-md, 8px); }",
+    ".bkl-root .bkl-foot-copy { flex: 1 1 180px; min-width: 180px; font-size: 12px; color: var(--dsw-alias-label-tertiary); }",
+    ".bkl-root .bkl-foot-copy strong { display: block; color: var(--dsw-alias-label-primary); font-size: 13px; font-weight: 600; }",
+    ".bkl-root .bkl-foot-copy.blocked strong { color: var(--dsw-alias-state-error-primary); }",
+    ".bkl-root .bkl-foot-reason { font-size: 12px; color: var(--dsw-alias-label-tertiary); margin-top: 2px; }",
+
+    // 补丁分界标题与折叠清单
+    ".bkl-root .bkl-section-label { font-size: 13px; color: var(--dsw-alias-label-primary); font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 10px; }",
+    ".bkl-root .bkl-section-label > span:last-child { font-size: 12px; color: var(--dsw-alias-label-tertiary); font-weight: 400; }",
+    ".bkl-root details.bkl-disclosure { border-top: 0.5px solid var(--dsw-alias-border-l2); margin-top: 14px; padding-top: 10px; font-size: 12px; }",
+    ".bkl-root details.bkl-disclosure summary { cursor: pointer; color: var(--dsw-alias-label-secondary); font-weight: 550; user-select: none; }",
+    ".bkl-root details.bkl-disclosure summary:hover { color: var(--dsw-alias-label-primary); }",
+    ".bkl-root .bkl-file-list { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 6px; }",
+    ".bkl-root .bkl-file-list li { display: flex; gap: 8px; align-items: flex-start; font-family: var(--dsw-font-mono, monospace); font-size: 11px; line-height: 1.6; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; background: var(--dsw-alias-bg-layer-2, #f7f8fa); border: 1px solid var(--dsw-alias-border-l2, #e1e5eb); border-radius: 6px; padding: 6px 9px; }",
+
+    // ---- 阶段四样式 --------------------------------------------------------
+    // 模式网格与模式卡片
+    ".bkl-root .mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 12px; }",
+    "@media (max-width: 640px) { .bkl-root .mode-grid { grid-template-columns: minmax(0, 1fr); } }",
+    ".bkl-root .mode-card { border: 1.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md, 8px); padding: 16px; background: var(--dsw-alias-bg-layer-1); cursor: pointer; display: flex; flex-direction: column; gap: 8px; position: relative; transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease; text-align: left; }",
+    ".bkl-root .mode-card:hover { border-color: var(--dsw-alias-border-l4); background: var(--dsw-alias-bg-layer-2); }",
+    ".bkl-root .mode-card.selected { border-color: var(--dsw-alias-state-business-primary); background: linear-gradient(170deg, var(--dsw-alias-state-business-tertiary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent)), var(--dsw-alias-bg-layer-1) 50%); box-shadow: 0 0 0 1px var(--dsw-alias-state-business-primary); }",
+    ".bkl-root .mode-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }",
+    ".bkl-root .mode-title { font-size: 14px; font-weight: 650; color: var(--dsw-alias-label-primary); display: flex; align-items: center; gap: 6px; }",
+    ".bkl-root .tradeoff { font-size: 12px; color: var(--dsw-alias-label-secondary); line-height: 1.55; display: flex; flex-direction: column; gap: 4px; }",
+    ".bkl-root .tradeoff-good { color: var(--dsw-alias-label-secondary); }",
+    ".bkl-root .tradeoff-cost { color: var(--dsw-alias-label-caption); }",
+    ".bkl-root .mode-budget { margin-top: auto; padding-top: 8px; border-top: 0.5px dashed var(--dsw-alias-border-l2); font-size: 11px; font-family: var(--dsw-font-mono, monospace); color: var(--dsw-alias-label-tertiary); display: flex; align-items: center; gap: 6px; }",
+    ".bkl-root .mode-card.selected .mode-budget { color: var(--dsw-alias-state-business-primary); }",
+
+    // 模式横向对比表
+    ".bkl-root .compare { width: 100%; border-collapse: collapse; font-size: 12px; margin: 12px 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md, 8px); overflow: hidden; }",
+    ".bkl-root .compare th, .bkl-root .compare td { padding: 9px 12px; text-align: left; border-bottom: 0.5px solid var(--dsw-alias-border-l2); border-right: 0.5px solid var(--dsw-alias-border-l2); }",
+    ".bkl-root .compare th:last-child, .bkl-root .compare td:last-child { border-right: none; }",
+    ".bkl-root .compare tr:last-child td { border-bottom: none; }",
+    ".bkl-root .compare th { background: var(--dsw-alias-bg-layer-2); font-weight: 600; color: var(--dsw-alias-label-primary); }",
+    ".bkl-root .compare td { color: var(--dsw-alias-label-secondary); }",
+    ".bkl-root .compare td.col-target { font-weight: 600; color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-state-business-tertiary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 6%, transparent)); }",
+
+    // Prompt 编辑器脏状态
+    ".bkl-root .editor-card.dirty { border-color: var(--dsw-alias-state-warn-secondary, color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent)) !important; box-shadow: 0 0 0 1px var(--dsw-alias-state-warn-secondary, color-mix(in srgb, var(--dsw-alias-state-warn-primary) 36%, transparent)); }",
   ].join("\n")
 
   const TEXT = {
@@ -374,6 +636,28 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       pageRulesDesc: "保存是存下来；激活才会写入指令文件。同一时间激活一条。",
       pageWordsTitle: "管理目标词",
       pageWordsDesc: "消息交给模型前，把原词换成替换词。保存后新开会话生效。",
+      // 阶段二新增：新手提示系统（PageTips）与页面描述分段
+      pageTipRegionLabel: "页面提示",
+      pageTipHeading: "这页做什么",
+      pageTipDismiss: "收起这条提示",
+      tipOverviewText: "这页告诉你现在卡在哪一步。",
+      tipOverviewPitfall: "常见误区：卡片提示差一步时，照着最上方的主操作卡片执行即可，无需盲目重启或重复应用。",
+      tipPatchesText: "先打开需要的开关，再点右下角「检查并应用」才会真正改文件。",
+      tipPatchesPitfall: "常见误区：关掉开关不等于撤销，已写入的改动要用「回退」恢复。",
+      tipPromptText: "模式决定附加约束的松紧，正文是两档共用的附加指令。",
+      tipPromptPitfall: "常见误区：推荐模式不会降低实际执行权限，权限由宿主沙箱决定。",
+      tipRulesText: "规则先「保存」，再「激活」才会写进指令文件。同一时间只激活一条。",
+      tipRulesPitfall: "常见误区：保存后没激活，模型是读不到的。",
+      tipWordsText: "消息交给模型前，把原词换成替换词。右侧可以先试效果。",
+      tipWordsPitfall: "常见误区：保存后要新开会话，当前会话不会回头替换。",
+      patchesHeadPrefix: "先挑选，再统一应用。每条",
+      patchesHeadMid: "都会改",
+      patchesHeadSuffix: "源码；关闭开关不会撤销已写入的改动。",
+      promptHeadPrefix: "选择附加指令模式，或编辑两档",
+      promptHeadSuffix: "。",
+      rulesHeadPrefix: "保存是存下来；",
+      rulesHeadMid: "才会写入",
+      rulesHeadSuffix: "。同一时间激活一条。",
       whenTag: (label) => `生效：${String(label)}`,
       whenRestart: "重启宿主后",
       whenNextTurn: "下一轮对话",
@@ -569,6 +853,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       modeDesc: "两档共用同一份破限正文；差别只有附加的自我约束和执行层上限。注意：提示词模式仅调整模型的自我约束，不降低宿主执行权限。切换不用重启，从下一轮对话开始生效。",
       modeRecommended: "推荐（常用破限）",
       modeUnrestricted: "完全解放（彻底破限）",
+      modeRecommendedShort: "推荐模式",
+      modeUnrestrictedShort: "完全解放模式",
       tagDefault: "默认（提示词）",
       tagCurrent: "正在使用",
       tagPending: "待确认",
@@ -852,6 +1138,216 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       wordsManage: "管理词库",
       wordsFromChatReturn: "返回会话",
       wordsNavHint: "请在设置里打开「破限」，会直接停在词库页。",
+
+      // 阶段一组件：Dialog 安全把手与提示
+      dialogGuardAckRequired: "先勾选上面的确认项，确认按钮才可用。",
+      dialogGuardWordRequired: (word) => `输入「${String(word)}」后，确认按钮才可用。`,
+      dialogGuardReady: "确认后立即执行。",
+      dialogConsequenceReversible: "可以撤销",
+      dialogConsequenceIrreversible: "此操作无法撤销",
+      dialogConfirmWordLabel: (word) => `输入 ${String(word)} 以确认`,
+
+      // 阶段一组件：StateBlock 与数据安全声明
+      dataProtectedDisk: "磁盘上的文件没有被修改。",
+      dataProtectedRules: "已有规则正文仍在 bodies/ 目录，没有被删除。",
+      stateActionRetry: "重新读取",
+      stateActionDetails: "查看保留了哪些数据",
+
+      // 阶段一组件：术语词典
+      termHost: "宿主",
+      tipHost: "运行插件的 DeepSeek Harness 程序本体。源码补丁改的就是它的文件。",
+      termPatch: "补丁",
+      tipPatch: "对宿主源码的一组小改动。应用 = 写进磁盘文件，重启宿主后才会加载。",
+      termPreflight: "预检",
+      tipPreflight: "写入前的自动核对：源码与补丁预期一致才写，不一致就整批停下，不会只写一半。",
+      termTakeover: "接管",
+      tipTakeover: "插件在本次运行中介入提示词与审批处理。关掉立即停止介入，但不撤销已写入磁盘的补丁。",
+      termActivate: "激活",
+      tipActivate: "把一条规则写进指令文件（AGENTS.md / CLAUDE.md），之后每次对话都会读到。",
+      termSharedPrompt: "共用正文",
+      tipSharedPrompt: "推荐、完全解放两档模式共用的附加指令。模式各自的附加段另外生效。",
+      termUnrestricted: "完全解放",
+      tipUnrestricted: "完全解放模式：解除附加自我约束，提高执行层超时与命令输出上限。",
+      termInstructions: "指令文件",
+      tipInstructions: "模型每次对话开始时读取的约定文件，例如 AGENTS.md、CLAUDE.md。",
+
+      // 阶段三组件与模型：4 阶段进度流
+      flowStep1Title: "配置宿主目录",
+      flowStep1Done: "已找到宿主源码",
+      flowStep1Current: "告诉插件源码在哪",
+      flowStep2Title: "选择补丁",
+      flowStep2Done: (n) => `已选 ${String(n)} 条`,
+      flowStep2Current: "还没有选择",
+      flowStep2Todo: "配置目录后进行",
+      flowStep3Title: "检查并应用",
+      flowStep3Blocked: "预检未通过，未写入",
+      flowStep3Revert: "已回退源码",
+      flowStep3Done: "已写入磁盘",
+      flowStep3Current: (n) => `待写入 ${String(n)} 个文件`,
+      flowStep3Todo: "选好补丁后进行",
+      flowStep4Title: "重启宿主",
+      flowStep4Current: "等你按原方式重启",
+      flowStep4Done: "已完成",
+      flowStep4Todo: "应用后进行",
+
+      // 阶段三：主行动卡片
+      actionCardLabelUrgent: "需要先处理",
+      actionCardLabelNextRoot: "下一步 · 配置环境",
+      actionCardLabelRestart: "还差一步 · 重启宿主",
+      actionCardLabelNextApply: "下一步 · 应用补丁",
+      actionCardLabelOptional: "按需选择",
+      actionCardLabelPass: "磁盘检查通过",
+      actionCardRulesCorruptTitle: "规则清单读不出来",
+      actionCardRulesCorruptBody: "已暂停规则写入，保护现有清单和正文。先查看恢复方式，补丁与提示词仍可独立管理。",
+      actionCardRulesCorruptBtn: "查看规则恢复",
+      actionCardBrokenTitle: "状态记录无法读取",
+      actionCardBrokenBody: "补丁记录损坏或版本不符，已暂停写入以保护源码。",
+      actionCardRootTitle: "先告诉插件宿主源码在哪里",
+      actionCardRootBody: "目前无法检查补丁。按原启动方式配置宿主目录，重启后再回来检查。",
+      actionCardRootBtn: "查看配置步骤",
+      actionCardBlockedTitle: "有一处源码与补丁预期不一致",
+      actionCardBlockedBody: "本次预检已阻断。先核对宿主版本和外部修改，再重新检查；不要直接覆盖源码。",
+      actionCardBlockedBtn: "查看阻断原因",
+      actionCardRestartRevertTitle: "文件已恢复，接下来重启宿主",
+      actionCardRestartApplyTitle: "补丁已写入，接下来重启宿主",
+      actionCardRestartBody: "磁盘内容已经更新，正在运行的宿主可能仍在使用旧代码。刷新网页不会重启宿主。",
+      actionCardRestartBtn: "查看重启步骤",
+      actionCardPendingTitle: "把选好的改动应用到宿主",
+      actionCardPendingBody: (enabled, pending) => `已选择 ${String(enabled)} 条补丁，预检通过。应用前，你可以逐项查看用途与将修改的 ${String(pending)} 个文件。`,
+      actionCardPendingBtn: "查看并应用补丁",
+      actionCardNoneTitle: "当前没有选择补丁",
+      actionCardNoneBody: "你仍可管理提示词与规则。补丁开关关闭后，之前已经写入的源码改动会保留，撤销请用回退。",
+      actionCardNoneBtn: "去挑选补丁",
+      actionCardDoneTitle: "所选补丁已在磁盘上就位",
+      actionCardDoneBody: "当前没有待写入文件。此检查不代表宿主已经重启，也不代表所有运行行为都已验收。",
+      actionCardDoneBtn: "调整提示词",
+
+      // 阶段三：技术诊断
+      diagCommit: "宿主提交",
+      diagHostRoot: "宿主根",
+      diagHttp: "插件 HTTP",
+      diagHttpMounted: "已挂载",
+      diagHttpUnmounted: "未挂载",
+      diagRulesIndex: "规则清单",
+      diagRulesCorrupt: "损坏",
+      diagRulesReadable: "可读",
+      diagLock: "操作锁",
+      diagLockBusy: "操作中",
+      diagLockIdle: "空闲",
+      diagApplied: "应用记录",
+      diagAppliedCount: (n) => `${String(n)} 个文件`,
+      diagAppliedNone: "无",
+      diagPreflight: "补丁预检",
+      diagRuntime: "运行行为",
+      diagRuntimeNotVerified: "未由此页面验证",
+
+      // 阶段三：概览与补丁扩展
+      overviewFlowLabel: "补丁生效进度",
+      overviewConfigTitle: "你的使用配置",
+      overviewConfigDesc: "这几项互相独立，按需要调整。",
+      overviewEnvTitle: "环境与权限",
+      overviewEnvDesc: "提示词模式决定附加指令与执行层上限，不能代替沙箱权限设置。",
+      overviewEffectTitle: "改动什么时候生效？",
+      overviewEffectPatches: "源码补丁",
+      overviewEffectPatchesDesc: "应用后重启宿主",
+      overviewEffectPrompt: "提示词",
+      overviewEffectPromptDesc: "下一轮对话",
+      overviewEffectRules: "规则",
+      overviewEffectRulesDesc: "激活后写入指令文件",
+      overviewEffectWords: "词库",
+      overviewEffectWordsDesc: "保存后新开会话",
+      overviewDiagTitle: "查看技术诊断",
+      overviewDiagNote: "含本机路径，不含凭据",
+      overviewDiagCopy: "复制诊断信息",
+      overviewDiagCopied: "诊断信息已复制，不含凭据",
+      patchFootPending: (n) => `预计写入 ${String(n)} 个文件`,
+      patchFootNone: "没有待写入文件",
+      patchFootBlocked: "预检未通过，不会写入",
+      patchFootReasonDefault: "写入前会保存快照；完成后需要重启宿主。",
+
+      // 阶段三：PatchesPage 与 OverviewPage 重塑文案
+      patchesSelectedBadge: (n) => `已选 ${String(n)} 条`,
+      sourcePatchesLabel: "源码补丁",
+      currentPromptModePrefix: "当前提示词模式：",
+      diskInPlace: "已就位",
+      diskPending: "待写入",
+      diskConflict: "有冲突",
+      diskUnapplied: "未应用",
+      diskUnchecked: "未检查",
+      patchDisclosureSummary: "改动说明与文件",
+      onlyUnrestricted: "仅完全解放",
+      switchModeToSelect: "切换模式后可选",
+      modeDisabledHint: "当前不可选",
+      blockedNoticeTitle: (n) => `预检发现 ${String(n)} 处不一致`,
+      blockedNoticeBody: "宿主源码可能被其他工具修改，或版本不匹配。先看具体原因，确认后再检查。",
+      viewBlockReason: "查看具体原因",
+      recheckSource: "再次检查源码",
+      promptMineSummary: "使用自定义共用正文 · 下一轮对话生效",
+      promptBuiltinSummary: "使用内置共用正文 · 下一轮对话生效",
+      rulesCorruptShort: "清单损坏",
+      rulesNoneShort: "尚未激活规则",
+      rulesCorruptSummary: "已暂停写入以保护原数据",
+      rulesActiveSummary: (target) => `已写入 ${String(target)}`,
+      rulesInactiveSummary: "保存规则后，再激活到指令文件",
+      adjustPrompt: "调整",
+      manageRules: "管理",
+      viewDetails: "查看",
+      takeoverStateOn: "已开启",
+      takeoverStateOff: "已暂停",
+      sandboxFullAccess: "完全权限",
+      sandboxHostDefault: "宿主受限",
+
+      // 阶段四：模式权衡卡片、横向对比表、Prompt 编辑器与规则安全把手
+      // 模式权衡与预算
+      modeRecTradeoffGood: "适合大多数日常任务，保留自我约束与不可逆操作提示",
+      modeRecTradeoffCost: "长命令、大输出更早被截断",
+      modeRecBudget: "命令 20 分钟 · 工具输出 0.5 MB · 子命令深度 2",
+      modeUnrTradeoffGood: "得到更长命令、更大输出、更深子命令，彻底解除自我约束",
+      modeUnrTradeoffCost: "不再要求先说明不可逆操作，需自行把控操作风险",
+      modeUnrBudget: "命令 9,999 秒 · 工具输出 1 MB · 子命令深度 5",
+
+      // 模式横向对比表
+      modeCompareItem: "项目",
+      modeCompareCurrent: (label) => (label ? `现在 · ${String(label)}` : "现在"),
+      modeCompareNext: (label) => (label ? `切换后 · ${String(label)}` : "切换后"),
+      modeCompareTimeout: "命令超时上限",
+      modeCompareOutputDepth: "工具输出 / 子命令深度",
+      modeCompareConstraint: "附加自我约束",
+      modeCompareRetained: "保留",
+      modeCompareLifted: "解除",
+      modeCompareTimeoutRec: "20 分钟",
+      modeCompareTimeoutUnr: "9,999 秒",
+      modeCompareOutputDepthRec: "0.5 MB / 深度 2",
+      modeCompareOutputDepthUnr: "1 MB / 深度 5",
+
+      // 模式弹窗把手与声明
+      confirmModeAckUnrestricted: "我了解完全解放模式不再约束改动范围，也不再要求先说明不可逆操作",
+      confirmModeConsequence: "可以随时切回，下一轮对话即恢复",
+      modeNoticeSandboxKeep: "实际执行权限保持不变",
+      modeNoticeSandboxKeepDesc: "选择推荐模式不会降低宿主沙箱的执行权限，权限始终由宿主自身配置决定。",
+
+      // 提示词统计与保护
+      promptCountExact: (chars, bytes) => `${String(chars)} 字 · ${String(bytes)} 字节`,
+      promptDirtyReason: "有未保存的修改，保存后从下一轮对话生效。",
+      dataProtectedPrompt: "磁盘上的正文文件没有被修改。",
+
+      // 规则数据保护与把手
+      dataProtectedRulesBodies: "已有规则正文仍保存在 bodies/ 目录，未被删除。",
+      confirmDeleteAck: "我已确认不再需要这条规则",
+      confirmDeleteConsequence: "此操作无法撤销，删除后无法从规则列表中找回",
+      confirmRecoverWord: "重置",
+      confirmRecoverConsequence: "重置后，原清单里的名称与激活关系无法在界面中恢复",
+      rulesFilesLocations: "涉及的文件位置",
+
+      // 阶段五收官新增：词库容量守卫与会话浮窗微窗口
+      wordsLimitNoticeTitle: (max) => `已达到 ${String(max)} 条上限`,
+      wordsLimitNoticeBody: "不能再添加新词条，仍可编辑或删除已有词条。",
+      dockAliasLimitHint: (n) => `仅显示前 3 条，完整 ${String(n)} 条请前往词库管理。`,
+      dockFooterHint: "Esc 关闭 · 每次改动单独保存",
+      dockOpenSettings: "打开完整设置",
+      dockManageAllWords: "管理全部词条",
+      dockAliasInlineDefault: "原词与替换词各最多 64 字符。",
+      dockModeHint: "切换前会确认影响，下一轮生效，不改变沙箱权限。",
     },
     en: {
       nav: "Breaklimit",
@@ -873,6 +1369,28 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       pageRulesDesc: "Saving stores it; activating writes it into the instruction file. One active at a time.",
       pageWordsTitle: "Manage terms",
       pageWordsDesc: "Swaps terms in your message before it reaches the model. Takes effect in a new session.",
+      // Phase 2 additions: Page tips & page head description segments
+      pageTipRegionLabel: "Page tip",
+      pageTipHeading: "What this page does",
+      pageTipDismiss: "Dismiss this tip",
+      tipOverviewText: "This page shows which step is currently blocking you.",
+      tipOverviewPitfall: "Common pitfall: Follow the primary action card at the top when a step is pending; no need to restart blindly or reapply.",
+      tipPatchesText: "Select the switches you need, then click Check and apply in the bottom right to write files.",
+      tipPatchesPitfall: "Common pitfall: Turning a switch off does not undo edits. Changes already written require Revert.",
+      tipPromptText: "The mode sets the tightness of self-constraints, while the body provides shared instructions.",
+      tipPromptPitfall: "Common pitfall: Recommended mode does not reduce sandbox permissions; sandbox boundaries govern actual authority.",
+      tipRulesText: "Rules are stored on save, and written to instruction files only when activated. One active rule at a time.",
+      tipRulesPitfall: "Common pitfall: If a rule is saved but not activated, the model cannot read it.",
+      tipWordsText: "Swaps target words in user messages before they reach the model. You can preview results on the right.",
+      tipWordsPitfall: "Common pitfall: Requires opening a new session after saving; existing chat history will not be retroactively swapped.",
+      patchesHeadPrefix: "Select first, apply once. Each ",
+      patchesHeadMid: " modifies ",
+      patchesHeadSuffix: " source files; turning a switch off does not undo applied changes.",
+      promptHeadPrefix: "Choose an instruction mode, or edit the ",
+      promptHeadSuffix: " shared across both modes.",
+      rulesHeadPrefix: "Saving stores it; ",
+      rulesHeadMid: " writes it to the ",
+      rulesHeadSuffix: " file. One active rule at a time.",
       whenTag: (label) => `Takes effect: ${String(label)}`,
       whenRestart: "after restarting the host",
       whenNextTurn: "next turn",
@@ -1068,6 +1586,8 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       modeDesc: "Both modes share the same jailbreak body; the difference is only extra self-constraints and execution limits. Note: Prompt modes only adjust self-constraints, not host execution permissions. Takes effect on the next turn without restart.",
       modeRecommended: "Recommended (everyday jailbreak)",
       modeUnrestricted: "Unrestricted (full jailbreak)",
+      modeRecommendedShort: "Recommended",
+      modeUnrestrictedShort: "Unrestricted",
       tagDefault: "default (prompt)",
       tagCurrent: "in use",
       tagPending: "to confirm",
@@ -1352,6 +1872,216 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       wordsManage: "Manage word list",
       wordsFromChatReturn: "Back to the conversation",
       wordsNavHint: "Open Breaklimit in Settings; it lands on the word list page.",
+
+      // Phase 1 components: Dialog guards & hints
+      dialogGuardAckRequired: "Check the confirmation box above to enable this button.",
+      dialogGuardWordRequired: (word) => `Type "${String(word)}" to enable this button.`,
+      dialogGuardReady: "Ready to proceed.",
+      dialogConsequenceReversible: "Reversible",
+      dialogConsequenceIrreversible: "Irreversible",
+      dialogConfirmWordLabel: (word) => `Type ${String(word)} to confirm`,
+
+      // Phase 1 components: StateBlock & data protection
+      dataProtectedDisk: "Files on disk have not been modified.",
+      dataProtectedRules: "Existing rule bodies remain in the bodies/ directory and were not deleted.",
+      stateActionRetry: "Read again",
+      stateActionDetails: "View retained data",
+
+      // Phase 1 components: Glossary terms
+      termHost: "Host",
+      tipHost: "The DeepSeek Harness application itself. Source patches modify its files.",
+      termPatch: "Patch",
+      tipPatch: "A set of changes to host source code. Applied = written to disk, loaded on host restart.",
+      termPreflight: "Preflight",
+      tipPreflight: "Pre-flight check before writing: stops completely if code deviates from expectations.",
+      termTakeover: "Takeover",
+      tipTakeover: "Plugin intervention during current runtime. Stopping it does not undo disk patches.",
+      termActivate: "Activate",
+      tipActivate: "Writes a rule to instruction files (AGENTS.md / CLAUDE.md) for future conversations.",
+      termSharedPrompt: "Shared prompt",
+      tipSharedPrompt: "Shared instructions used by both Recommended and Unrestricted modes.",
+      termUnrestricted: "Unrestricted",
+      tipUnrestricted: "Unrestricted mode: lifts additional self-constraints and raises execution limits.",
+      termInstructions: "Instructions",
+      tipInstructions: "Instruction files read by models at conversation start (e.g. AGENTS.md, CLAUDE.md).",
+
+      // Phase 3 components and models: 4-stage flow
+      flowStep1Title: "Configure host directory",
+      flowStep1Done: "Host source found",
+      flowStep1Current: "Specify host source location",
+      flowStep2Title: "Select patches",
+      flowStep2Done: (n) => `Selected ${String(n)} ${Number(n) === 1 ? "patch" : "patches"}`,
+      flowStep2Current: "None selected",
+      flowStep2Todo: "Configure directory first",
+      flowStep3Title: "Check and apply",
+      flowStep3Blocked: "Preflight blocked, nothing written",
+      flowStep3Revert: "Source reverted",
+      flowStep3Done: "Written to disk",
+      flowStep3Current: (n) => `${String(n)} ${Number(n) === 1 ? "file" : "files"} pending`,
+      flowStep3Todo: "Select patches first",
+      flowStep4Title: "Restart host",
+      flowStep4Current: "Waiting for host restart",
+      flowStep4Done: "Completed",
+      flowStep4Todo: "Pending patch application",
+
+      // Phase 3: Action card
+      actionCardLabelUrgent: "Action required",
+      actionCardLabelNextRoot: "Next - Configure environment",
+      actionCardLabelRestart: "One step left - Restart host",
+      actionCardLabelNextApply: "Next - Apply patches",
+      actionCardLabelOptional: "Select as needed",
+      actionCardLabelPass: "Disk check passed",
+      actionCardRulesCorruptTitle: "Rules index is unreadable",
+      actionCardRulesCorruptBody: "Rule writes are suspended to protect existing manifests and bodies. Review recovery options; patches and prompts remain manageable.",
+      actionCardRulesCorruptBtn: "Review rule recovery",
+      actionCardBrokenTitle: "State record unreadable",
+      actionCardBrokenBody: "Patch state record is corrupted or version mismatched; writes paused to protect source.",
+      actionCardRootTitle: "Configure host source directory first",
+      actionCardRootBody: "Cannot check patches yet. Configure the host root path as launched, then return to check.",
+      actionCardRootBtn: "View configuration steps",
+      actionCardBlockedTitle: "Source deviates from patch expectations",
+      actionCardBlockedBody: "Preflight blocked. Verify host version and external edits before rechecking; do not blindly overwrite.",
+      actionCardBlockedBtn: "View blocking cause",
+      actionCardRestartRevertTitle: "Files restored, now restart host",
+      actionCardRestartApplyTitle: "Patches written, now restart host",
+      actionCardRestartBody: "Disk contents updated, but running host may still execute old code. Refreshing browser will not restart host.",
+      actionCardRestartBtn: "View restart steps",
+      actionCardPendingTitle: "Apply chosen changes to host",
+      actionCardPendingBody: (enabled, pending) => `Selected ${String(enabled)} ${Number(enabled) === 1 ? "patch" : "patches"}, preflight passed. Review purposes and the ${String(pending)} ${Number(pending) === 1 ? "file" : "files"} to be modified before applying.`,
+      actionCardPendingBtn: "Review and apply patches",
+      actionCardNoneTitle: "No patches selected",
+      actionCardNoneBody: "You can still manage prompts and rules. Turning off patch switches keeps already written source changes; use revert to undo.",
+      actionCardNoneBtn: "Go pick patches",
+      actionCardDoneTitle: "Selected patches in place on disk",
+      actionCardDoneBody: "No pending files to write. This check does not mean the host has restarted, nor that runtime behaviors are fully verified.",
+      actionCardDoneBtn: "Adjust prompt",
+
+      // Phase 3: Diagnostics
+      diagCommit: "Host commit",
+      diagHostRoot: "Host root",
+      diagHttp: "Plugin HTTP",
+      diagHttpMounted: "Mounted",
+      diagHttpUnmounted: "Unmounted",
+      diagRulesIndex: "Rules index",
+      diagRulesCorrupt: "Corrupted",
+      diagRulesReadable: "Readable",
+      diagLock: "Operation lock",
+      diagLockBusy: "Busy",
+      diagLockIdle: "Idle",
+      diagApplied: "Applied records",
+      diagAppliedCount: (n) => `${String(n)} ${Number(n) === 1 ? "file" : "files"}`,
+      diagAppliedNone: "None",
+      diagPreflight: "Patch preflight",
+      diagRuntime: "Runtime behavior",
+      diagRuntimeNotVerified: "Not verified by this page",
+
+      // Phase 3: Overview and patches extension
+      overviewFlowLabel: "Patch application progress",
+      overviewConfigTitle: "Your configuration",
+      overviewConfigDesc: "These settings are independent; adjust as needed.",
+      overviewEnvTitle: "Environment and permissions",
+      overviewEnvDesc: "Prompt mode dictates instructions and execution limits; it does not replace sandbox settings.",
+      overviewEffectTitle: "When do changes take effect?",
+      overviewEffectPatches: "Source patches",
+      overviewEffectPatchesDesc: "Restart host after applying",
+      overviewEffectPrompt: "Prompt",
+      overviewEffectPromptDesc: "Next conversation turn",
+      overviewEffectRules: "Rules",
+      overviewEffectRulesDesc: "Written to instruction file on activation",
+      overviewEffectWords: "Word list",
+      overviewEffectWordsDesc: "Open new session after saving",
+      overviewDiagTitle: "View technical diagnostics",
+      overviewDiagNote: "Includes local paths, no credentials",
+      overviewDiagCopy: "Copy diagnostics",
+      overviewDiagCopied: "Diagnostics copied, no credentials included",
+      patchFootPending: (n) => `Estimated ${String(n)} ${Number(n) === 1 ? "file" : "files"} to write`,
+      patchFootNone: "No pending files to write",
+      patchFootBlocked: "Preflight blocked, will not write",
+      patchFootReasonDefault: "A snapshot is saved before writing; restart host when done.",
+
+      // Phase 3: PatchesPage and OverviewPage restyle
+      patchesSelectedBadge: (n) => `${String(n)} ${Number(n) === 1 ? "patch" : "patches"} selected`,
+      sourcePatchesLabel: "Source patches",
+      currentPromptModePrefix: "Current prompt mode: ",
+      diskInPlace: "In place",
+      diskPending: "Pending write",
+      diskConflict: "Conflict",
+      diskUnapplied: "Unapplied",
+      diskUnchecked: "Unchecked",
+      patchDisclosureSummary: "Change details and files",
+      onlyUnrestricted: "Full takeover only",
+      switchModeToSelect: "Switch mode to select",
+      modeDisabledHint: "Unavailable",
+      blockedNoticeTitle: (n) => `Preflight found ${String(n)} ${Number(n) === 1 ? "inconsistency" : "inconsistencies"}`,
+      blockedNoticeBody: "Host source may have been modified externally or version does not match. Review reasons before rechecking.",
+      viewBlockReason: "View blocking reason",
+      recheckSource: "Recheck source",
+      promptMineSummary: "Using custom shared prompt - takes effect next turn",
+      promptBuiltinSummary: "Using built-in shared prompt - takes effect next turn",
+      rulesCorruptShort: "Manifest corrupted",
+      rulesNoneShort: "No active rules",
+      rulesCorruptSummary: "Writes suspended to protect existing data",
+      rulesActiveSummary: (target) => `Written to ${String(target)}`,
+      rulesInactiveSummary: "Save a rule, then activate it to instruction file",
+      adjustPrompt: "Adjust",
+      manageRules: "Manage",
+      viewDetails: "View",
+      takeoverStateOn: "Enabled",
+      takeoverStateOff: "Paused",
+      sandboxFullAccess: "Full access",
+      sandboxHostDefault: "Host restricted",
+
+      // Phase 4: Mode tradeoff cards, comparison table, prompt editor & rules guardrails
+      // Mode tradeoffs & budget
+      modeRecTradeoffGood: "Fits most everyday tasks, keeping self-constraints and warnings for irreversible actions",
+      modeRecTradeoffCost: "Long commands and large outputs are truncated earlier",
+      modeRecBudget: "Command 20 min · Tool output 0.5 MB · Subagent depth 2",
+      modeUnrTradeoffGood: "Longer commands, larger output, and deeper subagents, fully lifting self-constraints",
+      modeUnrTradeoffCost: "No longer requires prior warning for irreversible actions; risk must be self-managed",
+      modeUnrBudget: "Command 9,999 s · Tool output 1 MB · Subagent depth 5",
+
+      // Mode comparison table
+      modeCompareItem: "Item",
+      modeCompareCurrent: (label) => (label ? `Now · ${String(label)}` : "Now"),
+      modeCompareNext: (label) => (label ? `Next · ${String(label)}` : "Next"),
+      modeCompareTimeout: "Command timeout",
+      modeCompareOutputDepth: "Tool output / subagent depth",
+      modeCompareConstraint: "Self-imposed constraints",
+      modeCompareRetained: "Retained",
+      modeCompareLifted: "Lifted",
+      modeCompareTimeoutRec: "20 min",
+      modeCompareTimeoutUnr: "9,999 s",
+      modeCompareOutputDepthRec: "0.5 MB / depth 2",
+      modeCompareOutputDepthUnr: "1 MB / depth 5",
+
+      // Mode dialog guardrails & notice
+      confirmModeAckUnrestricted: "I understand that Unrestricted mode no longer constrains change scope or requires warning before irreversible actions",
+      confirmModeConsequence: "You can switch back at any time; takes effect from the next turn",
+      modeNoticeSandboxKeep: "Actual execution permissions remain unchanged",
+      modeNoticeSandboxKeepDesc: "Selecting Recommended mode does not reduce sandbox permissions; authority is governed by host configuration.",
+
+      // Prompt count & protection
+      promptCountExact: (chars, bytes) => `${String(chars)} characters · ${String(bytes)} bytes`,
+      promptDirtyReason: "Unsaved changes; takes effect from the next turn after saving.",
+      dataProtectedPrompt: "The prompt body file on disk was not modified.",
+
+      // Rules data protection & guardrails
+      dataProtectedRulesBodies: "Existing rule bodies remain in the bodies/ directory and were not deleted.",
+      confirmDeleteAck: "I confirm that I no longer need this rule",
+      confirmDeleteConsequence: "This action cannot be undone; the rule cannot be recovered once deleted",
+      confirmRecoverWord: "RESET",
+      confirmRecoverConsequence: "After resetting, rule names and activation links from the original list cannot be restored in the UI",
+      rulesFilesLocations: "File locations involved",
+
+      // Phase 5 closure additions: Word capacity guard & dock mini window
+      wordsLimitNoticeTitle: (max) => `The ${String(max)}-entry limit is reached`,
+      wordsLimitNoticeBody: "Cannot add new entries. You can still edit or delete existing entries.",
+      dockAliasLimitHint: (n) => `Showing first 3 only; view all ${String(n)} entries in word management.`,
+      dockFooterHint: "Esc to close · Each change saved individually",
+      dockOpenSettings: "Open Full Settings",
+      dockManageAllWords: "Manage All Entries",
+      dockAliasInlineDefault: "At most 64 characters each for original and replacement.",
+      dockModeHint: "Impact confirmed before switching; applies next turn without altering sandbox permissions.",
     },
   }
 
@@ -1503,11 +2233,27 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   }
 
   function utf8Length(text) {
-    try {
-      return new TextEncoder().encode(text).length
-    } catch {
-      return text.length
+    if (typeof TextEncoder !== "undefined") {
+      try {
+        return new TextEncoder().encode(text).length
+      } catch {}
     }
+    if (typeof Buffer !== "undefined") {
+      try {
+        return Buffer.byteLength(text, "utf8")
+      } catch {}
+    }
+    let bytes = 0
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i)
+      if (code < 0x80) bytes += 1
+      else if (code < 0x800) bytes += 2
+      else if (code >= 0xd800 && code <= 0xdbff) {
+        bytes += 4
+        i += 1
+      } else bytes += 3
+    }
+    return bytes
   }
 
   function formatTime(value) {
@@ -2042,6 +2788,193 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     return T.recheck
   }
 
+  // ---- 阶段三纯函数建模 ----------------------------------------------------
+
+  function redactPath(value) {
+    if (typeof value !== "string" || value === "") return ""
+    const parts = value
+      .replace(/\\/g, "/")
+      .split("/")
+      .filter((part) => part !== "" && part !== ".")
+    if (parts.length < 2) return value
+    return `…/${parts[parts.length - 1]}`
+  }
+
+  function flowSteps(status, f) {
+    const effectiveF = f || derive(status)
+    const chosen = effectiveF.enabledCount ?? 0
+    const count = effectiveF.pendingFiles ?? 0
+    const hasRoot = !effectiveF.rootMissing
+    const isRestart = effectiveF.restartPending || Boolean(status?.restart)
+    const isRevert = status?.restart === "revert" || effectiveF.restart === "revert"
+    const isBlocked = (effectiveF.blocked?.length ?? 0) > 0 || effectiveF.broken === true
+    const hasApplied = effectiveF.applied !== null && effectiveF.applied !== undefined
+
+    const s1 = hasRoot ? "done" : "current"
+    const s2 = !hasRoot ? "todo" : chosen > 0 ? "done" : "current"
+    const s3 = isRestart
+      ? "done"
+      : !hasRoot || chosen === 0
+        ? "todo"
+        : isBlocked
+          ? "blocked"
+          : count > 0
+            ? "current"
+            : hasApplied
+              ? "done"
+              : "todo"
+    const s4 = isRestart ? "current" : s3 === "done" ? "done" : "todo"
+
+    return [
+      [
+        T.flowStep1Title,
+        s1,
+        s1 === "done" ? T.flowStep1Done : T.flowStep1Current,
+      ],
+      [
+        T.flowStep2Title,
+        s2,
+        chosen > 0 ? T.flowStep2Done(chosen) : s2 === "todo" ? T.flowStep2Todo : T.flowStep2Current,
+      ],
+      [
+        T.flowStep3Title,
+        s3,
+        s3 === "blocked"
+          ? T.flowStep3Blocked
+          : isRevert
+            ? T.flowStep3Revert
+            : s3 === "done"
+              ? T.flowStep3Done
+              : s3 === "current"
+                ? T.flowStep3Current(count)
+                : T.flowStep3Todo,
+      ],
+      [
+        T.flowStep4Title,
+        s4,
+        s4 === "current" ? T.flowStep4Current : s4 === "done" ? T.flowStep4Done : T.flowStep4Todo,
+      ],
+    ]
+  }
+
+  function deriveActionCard(status, f) {
+    const effectiveF = f || derive(status)
+    if (effectiveF.rulesIndex === "corrupt") {
+      return {
+        tone: "error",
+        label: T.actionCardLabelUrgent,
+        title: T.actionCardRulesCorruptTitle,
+        body: T.actionCardRulesCorruptBody,
+        button: T.actionCardRulesCorruptBtn,
+        action: "goRules",
+        icon: "alert",
+      }
+    }
+    if (effectiveF.broken) {
+      return {
+        tone: "error",
+        label: T.actionCardLabelUrgent,
+        title: T.actionCardBrokenTitle,
+        body: T.actionCardBrokenBody,
+        button: T.recheck,
+        action: "refresh",
+        icon: "alert",
+      }
+    }
+    if (effectiveF.rootMissing) {
+      return {
+        tone: "warn",
+        label: T.actionCardLabelNextRoot,
+        title: T.actionCardRootTitle,
+        body: T.actionCardRootBody,
+        button: T.actionCardRootBtn,
+        action: "configureRoot",
+        icon: "folder",
+      }
+    }
+    if ((effectiveF.blocked?.length ?? 0) > 0) {
+      return {
+        tone: "error",
+        label: T.actionCardLabelUrgent,
+        title: T.actionCardBlockedTitle,
+        body: T.actionCardBlockedBody,
+        button: T.actionCardBlockedBtn,
+        action: "goPatches",
+        icon: "alert",
+      }
+    }
+    if (effectiveF.restartPending || Boolean(status?.restart)) {
+      const isRevert = status?.restart === "revert" || effectiveF.restart === "revert"
+      return {
+        tone: "warn",
+        label: T.actionCardLabelRestart,
+        title: isRevert ? T.actionCardRestartRevertTitle : T.actionCardRestartApplyTitle,
+        body: T.actionCardRestartBody,
+        button: T.actionCardRestartBtn,
+        action: "restartHelp",
+        icon: "refresh",
+      }
+    }
+    if ((effectiveF.pendingFiles ?? 0) > 0) {
+      return {
+        tone: "",
+        label: T.actionCardLabelNextApply,
+        title: T.actionCardPendingTitle,
+        body: T.actionCardPendingBody(effectiveF.enabledCount ?? 0, effectiveF.pendingFiles),
+        button: T.actionCardPendingBtn,
+        action: "goPatches",
+        icon: "arrow",
+      }
+    }
+    if ((effectiveF.total ?? 0) > 0 && (effectiveF.enabledCount ?? 0) === 0) {
+      return {
+        tone: "",
+        label: T.actionCardLabelOptional,
+        title: T.actionCardNoneTitle,
+        body: T.actionCardNoneBody,
+        button: T.actionCardNoneBtn,
+        action: "goPatches",
+        icon: "patch",
+      }
+    }
+    return {
+      tone: "ok",
+      label: T.actionCardLabelPass,
+      title: T.actionCardDoneTitle,
+      body: T.actionCardDoneBody,
+      button: T.actionCardDoneBtn,
+      action: "goPrompt",
+      icon: "check",
+    }
+  }
+
+  function formatDiagnostics(status, f) {
+    const effectiveF = f || derive(status)
+    const targetCommit = status?.target?.commit ? String(status.target.commit).slice(0, 12) : T.unknown
+    const hostRootText = status?.hostRoot ? redactPath(status.hostRoot) : T.rootMissingShort
+    const httpText = status?.http?.mounted === true ? T.diagHttpMounted : T.diagHttpUnmounted
+    const rulesText = effectiveF.rulesIndex === "corrupt" || status?.rulesIndex === "corrupt"
+      ? T.diagRulesCorrupt
+      : T.diagRulesReadable
+    const lockText = status?.lock?.busy === true ? T.diagLockBusy : T.diagLockIdle
+    const appliedFilesCount = effectiveF.applied?.files ?? status?.applied?.files
+    const appliedText = (appliedFilesCount !== undefined && appliedFilesCount !== null)
+      ? T.diagAppliedCount(appliedFilesCount)
+      : T.diagAppliedNone
+    const preCode = status?.preflight?.code ? String(status.preflight.code) : T.unknown
+
+    return [
+      `${T.diagCommit}: ${targetCommit}`,
+      `${T.diagHostRoot}: ${hostRootText}`,
+      `${T.diagHttp}: ${httpText}`,
+      `${T.diagRulesIndex}: ${rulesText}`,
+      `${T.diagLock}: ${lockText}`,
+      `${T.diagApplied}: ${appliedText}`,
+      `${T.diagPreflight}: ${preCode}`,
+      `${T.diagRuntime}: ${T.diagRuntimeNotVerified}`,
+    ].join("\n")
+  }
+
   // ---- 共用小件 -------------------------------------------------------------
 
   /**
@@ -2106,18 +3039,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     return h("span", { style: merge(S.tag, color && { color, border: "0.5px solid currentColor" }) }, children)
   }
 
-  /** 每页顶部：大标题、一句说明、生效时机、右侧操作。 */
-  function PageHead({ title, desc, when, aside, titleId }) {
-    return h("div", { style: S.pageHead },
-      h("div", { style: S.pageHeadText },
-        h("h2", { id: titleId, style: S.pageTitle }, title),
-        desc === undefined ? null : h("p", { style: S.pageDesc }, desc)),
-      when === undefined ? null : h("span", { style: S.whenTag }, T.whenTag(when)),
-      aside ?? null)
-  }
-
-  function Card({ title, titleId, desc, descId, aside, children }) {
-    return h("section", { style: S.card, "aria-labelledby": title === undefined ? undefined : titleId },
+  function Card({ className, title, titleId, desc, descId, aside, children }) {
+    const cardClass = className ? `bkl-card ${className}` : "bkl-card"
+    return h("section", { className: cardClass, style: S.card, "aria-labelledby": title === undefined ? undefined : titleId },
       title === undefined
         ? null
         : h("div", { style: S.cardHead },
@@ -2136,28 +3060,260 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       rest > 0 ? h("li", { key: "more", style: S.pathMore }, T.andMore(rest)) : null)
   }
 
-  function Notice({ notice, onAction, onDismiss }) {
-    const tone = notice.tone ?? "info"
-    const items = Array.isArray(notice.items) ? notice.items.filter(item => item !== "") : []
+  const SVG_SHAPES = {
+    info: "M12 8h.01M12 11v6M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
+    alert: "m12 3 10 18H2L12 3ZM12 9v5M12 17h.01",
+    checkCircle: "M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0M8 12l3 3 5-6",
+    xCircle: "M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0M9 9l6 6M15 9l-6 6",
+    shield: "M12 3 3 7v6c0 4 9 8 9 8s9-4 9-8V7l-9-4ZM8 12l3 3 5-5",
+    undo: "M9 5 3 11l6 6M3 11h12a6 6 0 0 1 0 12",
+    refresh: "M20 10a8 8 0 0 0-14-5L3 8m0-5v5h5M4 14a8 8 0 0 0 14 5l3-3m0 5v-5h-5",
+    file: "M14 2H5v20h14V7l-5-5ZM14 2v5h5M8 12h8M8 16h6",
+    dictionary: "M4 3h15v18H4V3ZM7 3v18M10 7h6M10 11h4",
+    terminal: "m5 7 5 5-5 5m8 0h6",
+    code: "m8 5-7 7 7 7m8-14 7 7-7 7",
+    bolt: "m13 2-9 12h7l-1 8 10-12h-7l1-8",
+    search: "m21 21-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0",
+    close: "m6 6 12 12M6 18 18 6",
+    arrow: "M5 12h14m-5-5 5 5-5 5",
+    check: "m5 12 4 4L19 6",
+    bulb: "M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3Z",
+    clock: "M12 7v5l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
+    chat: "M21 4H3v14h5l4 4v-4h9V4Z",
+    folder: "M3 6h7l2 2h9v12H3V6Z",
+    patch: "m7 3 14 14-4 4L3 7l4-4ZM14 7l3-3M4 17l3-3M10 6l-4 4M18 14l-4 4",
+    copy: "M9 9h12v12H9zM15 9V3H3v12h6",
+    chevron: "m9 18 6-6-6-6",
+    plus: "M12 5v14M5 12h14",
+    trash: "M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2",
+  }
+
+  function Icon({ name, size = 16, style, className = "" }) {
+    const d = SVG_SHAPES[name] || SVG_SHAPES.info
+    return h("svg", {
+      className: `bkl-icon ${className}`,
+      viewBox: "0 0 24 24",
+      width: size,
+      height: size,
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: 1.8,
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      "aria-hidden": "true",
+      style: merge({ flexShrink: 0, verticalAlign: "middle" }, style),
+    }, h("path", { d }))
+  }
+
+  const GLOSSARY_MAP = {
+    host: () => ({ word: T.termHost, tip: T.tipHost }),
+    patch: () => ({ word: T.termPatch, tip: T.tipPatch }),
+    preflight: () => ({ word: T.termPreflight, tip: T.tipPreflight }),
+    takeover: () => ({ word: T.termTakeover, tip: T.tipTakeover }),
+    activate: () => ({ word: T.termActivate, tip: T.tipActivate }),
+    sharedPrompt: () => ({ word: T.termSharedPrompt, tip: T.tipSharedPrompt }),
+    unrestricted: () => ({ word: T.termUnrestricted, tip: T.tipUnrestricted }),
+    instructions: () => ({ word: T.termInstructions, tip: T.tipInstructions }),
+  }
+
+  function Term({ termKey, word, tip, label, children }) {
+    const fn = termKey ? GLOSSARY_MAP[termKey] : null
+    const pair = fn ? fn() : null
+    const displayWord = children ?? label ?? (pair ? pair.word : word)
+    const displayTip = pair ? pair.tip : tip
+    if (!displayTip) return h("span", null, displayWord)
+    return h("span", {
+      className: "bkl-term",
+      tabIndex: 0,
+      role: "note",
+      "data-tip": displayTip,
+      "aria-label": `${String(displayWord)} (${String(displayTip)})`,
+      style: S.term,
+    }, displayWord)
+  }
+
+  const PAGE_EFFECTS = {
+    patches: { icon: "refresh", when: () => T.whenRestart },
+    prompt: { icon: "clock", when: () => T.whenNextTurn },
+    rules: { icon: "file", when: () => T.whenActivate },
+    words: { icon: "chat", when: () => T.whenNewSession },
+  }
+
+  const PAGE_TIPS_MAP = {
+    overview: () => ({ text: T.tipOverviewText, what: T.tipOverviewText, pitfall: T.tipOverviewPitfall }),
+    patches: () => ({ text: T.tipPatchesText, what: T.tipPatchesText, pitfall: T.tipPatchesPitfall }),
+    prompt: () => ({ text: T.tipPromptText, what: T.tipPromptText, pitfall: T.tipPromptPitfall }),
+    rules: () => ({ text: T.tipRulesText, what: T.tipRulesText, pitfall: T.tipRulesPitfall }),
+    words: () => ({ text: T.tipWordsText, what: T.tipWordsText, pitfall: T.tipWordsPitfall }),
+  }
+
+  /** 页面顶部新手引导卡片（这页做什么 + 常见误区） */
+  function PageTip({ page, pageKey, dismissed, tipOpen, onDismiss }) {
+    const target = page ?? pageKey
+    const [hidden, setHidden] = useState(false)
+    if (tipOpen === false || dismissed === true || hidden || !target) return null
+    const getter = PAGE_TIPS_MAP[target]
+    if (!getter) return null
+    const spec = getter()
+
     return h("div", {
-      className: "bkl-fade",
-      role: tone === "error" ? "alert" : "status",
-      style: merge(S.banner, { background: TONE_SOFT[tone] ?? tk.well }),
+      className: "bkl-tip bkl-fade",
+      role: "region",
+      "aria-label": T.pageTipRegionLabel,
+      style: S.pageTip,
     },
-      h("div", { style: S.bannerHead },
-        h(Dot, { tone }),
-        h("p", { style: S.bannerTitle }, notice.title),
-        onDismiss ? h(Button, { kind: "quiet", size: "small", label: T.dismiss, onClick: onDismiss }, T.dismissShort) : null),
-      notice.next ? h("p", { style: S.text }, notice.next) : null,
-      items.length > 0 ? h(PathList, { items }) : null,
-      notice.action || notice.code
-        ? h("div", { style: S.row },
-          notice.action && onAction
-            ? h(Button, { size: "small", onClick: () => { onAction(notice.action) } }, actionLabel(notice.action))
-            : null,
-          h("span", { style: S.spacer }),
-          notice.code ? h("span", { style: S.code }, T.errorCode(notice.code)) : null)
+      h("span", { className: "bkl-tip-icon", style: S.pageTipIcon },
+        h(Icon, { name: "bulb", size: 16 })),
+      h("div", { className: "bkl-tip-content", style: S.pageTipContent },
+        h("strong", { style: S.pageTipLead }, T.pageTipHeading),
+        h("span", { style: S.pageTipText }, spec.text),
+        h("span", { className: "bkl-tip-pitfall", style: S.pageTipPitfall }, spec.pitfall)),
+      h("button", {
+        type: "button",
+        className: "bkl-tip-close",
+        style: S.pageTipClose,
+        title: T.pageTipDismiss,
+        "aria-label": T.pageTipDismiss,
+        onClick: () => {
+          setHidden(true)
+          if (onDismiss) onDismiss(target)
+        },
+      }, h(Icon, { name: "close", size: 14 })))
+  }
+
+  /** 每页顶部：大标题、一句说明、生效时机、右侧操作与页面提示插槽。 */
+  function PageHead({ page, title, desc, when, effectIcon, aside, titleId, tipOpen = true, onDismissTip, children }) {
+    const fx = page ? PAGE_EFFECTS[page] : null
+    const fxIcon = effectIcon || fx?.icon
+    const effectiveWhen = when !== undefined ? when : (fx?.when ? fx.when() : undefined)
+    const whenPrefix = T.whenTag("")
+    const whenText = effectiveWhen === undefined
+      ? null
+      : (typeof effectiveWhen === "string" && effectiveWhen.startsWith(whenPrefix))
+        ? effectiveWhen
+        : T.whenTag(effectiveWhen)
+
+    return h("div", { style: S.pageHeadWrap },
+      h("div", { style: S.pageHead },
+        h("div", { style: S.pageHeadText },
+          h("h2", { id: titleId, style: S.pageTitle }, title),
+          desc === undefined ? null : h("p", { style: S.pageDesc }, desc)),
+        whenText === null ? null : h("span", { className: "bkl-badge-effect", style: S.whenTag },
+          fxIcon ? h(Icon, { name: fxIcon, size: 13, style: { marginRight: "4px" } }) : null,
+          whenText),
+        aside ?? null),
+      tipOpen && page ? h(PageTip, { page, onDismiss: onDismissTip }) : null,
+      children ?? null)
+  }
+
+  function StateBlock({ tone = "empty", icon: customIcon, title, body, data, actions, extra, compact = false }) {
+    const defaultIcon = {
+      empty: "info",
+      loading: "refresh",
+      warn: "alert",
+      error: "xCircle",
+    }[tone] || "info"
+
+    const isSpin = tone === "loading"
+    const iconName = customIcon || defaultIcon
+    const iconTone = tone === "empty" ? "idle" : tone
+
+    return h("div", {
+      className: `bkl-state bkl-state-${tone} ${compact ? "bkl-state-compact" : ""} bkl-pop`,
+      role: tone === "error" ? "alert" : "status",
+      style: merge(
+        S.stateBlock,
+        tone === "empty" && S.stateEmpty,
+        tone === "warn" && S.stateWarn,
+        tone === "error" && S.stateError,
+        tone === "loading" && S.stateLoading,
+        compact && S.stateCompact,
+      ),
+    },
+      h("span", {
+        className: "bkl-state-icon",
+        style: merge(
+          S.stateIcon,
+          {
+            background: TONE_SOFT[iconTone] ?? tk.well,
+            color: TONE_COLOR[iconTone] ?? tk.label,
+            border: `1px solid ${TONE_LINE[iconTone] ?? tk.line2}`,
+          },
+        ),
+      },
+        isSpin
+          ? h("span", { className: "bkl-spinner", style: S.spinner })
+          : h(Icon, { name: iconName, size: 24 })),
+      h("h3", { style: merge(S.stateTitle, tone === "error" && { color: tk.error }) }, title),
+      body ? h("p", { style: S.stateBody }, body) : null,
+      data
+        ? h("p", { className: "bkl-notice-data", style: S.noticeDataCenter },
+            h(Icon, { name: "shield", size: 14, style: { color: tk.ok } }),
+            h("span", null, data))
+        : null,
+      actions && actions.length > 0
+        ? h("div", { className: "bkl-state-actions", style: S.stateActions }, actions)
+        : null,
+      extra
+        ? h("div", { className: "bkl-state-extra", style: S.stateExtra }, extra)
         : null)
+  }
+
+  function Notice({ notice, title, body, next, tone: propTone, data, items: propItems, action, code, actions, onAction, onDismiss }) {
+    const rawTone = propTone ?? notice?.tone ?? "info"
+    const tone = rawTone === "ok" ? "success" : rawTone
+    const headTitle = title ?? notice?.title
+    const bodyText = body ?? next ?? notice?.next ?? notice?.body
+    const dataText = data ?? notice?.data
+    const items = (propItems ?? notice?.items ?? []).filter(item => typeof item === "string" && item !== "")
+    const actionKey = action ?? notice?.action
+    const errorCode = code ?? notice?.code
+
+    const toneIcons = {
+      info: "info",
+      warn: "alert",
+      error: "xCircle",
+      success: "checkCircle",
+      loading: "refresh",
+    }
+
+    return h("div", {
+      className: `bkl-notice bkl-notice-${tone} bkl-fade`,
+      role: tone === "error" ? "alert" : "status",
+      style: merge(
+        S.noticeBox,
+        tone === "info" && S.noticeInfo,
+        tone === "warn" && S.noticeWarn,
+        tone === "error" && S.noticeError,
+        (tone === "success" || tone === "ok") && S.noticeSuccess,
+        tone === "loading" && S.noticeLoading,
+      ),
+    },
+      h("span", {
+        className: "bkl-notice-icon",
+        style: merge(S.noticeIconBox, { color: TONE_COLOR[tone] ?? tk.accent }),
+      },
+        tone === "loading"
+          ? h("span", { className: "bkl-spinner", style: S.spinnerSm })
+          : h(Icon, { name: toneIcons[tone] || "info", size: 15 })),
+      h("div", { style: S.noticeGrow },
+        h("div", { style: S.noticeHeadRow },
+          h("strong", { style: merge(S.noticeTitle, { color: TONE_COLOR[tone] ?? tk.label }) }, headTitle),
+          onDismiss ? h(Button, { kind: "quiet", size: "small", label: T.dismiss, onClick: onDismiss }, T.dismissShort) : null),
+        bodyText ? h("p", { style: S.noticeBodyText }, bodyText) : null,
+        items.length > 0 ? h(PathList, { items }) : null,
+        dataText ? h("p", { className: "bkl-notice-data", style: S.noticeDataLeft },
+          h(Icon, { name: "shield", size: 13, style: { color: tk.ok } }),
+          h("span", null, dataText)) : null,
+        (actionKey || actions || errorCode)
+          ? h("div", { style: S.noticeActionRow },
+              actionKey && onAction
+                ? h(Button, { size: "small", onClick: () => { onAction(actionKey) } }, actionLabel(actionKey))
+                : null,
+              actions ?? null,
+              errorCode ? h("span", { style: S.spacer }) : null,
+              errorCode ? h("span", { style: S.code }, T.errorCode(errorCode)) : null)
+          : null))
   }
 
   // 弹窗：原生 <dialog> + showModal。Esc（cancel）走 onClose；打开后焦点先落到首个
@@ -2167,10 +3323,37 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
   // 两个 Dialog 常驻挂载、只切 open，所以标题与正文的 id 必须分开：
   // aria-labelledby 按 id 在整篇文档里找，共用 id 时后一个弹窗会读到前一个的标题。
-  function Dialog({ open, idBase = "bkl-dialog", title, tone, body, foot, onClose }) {
+  function Dialog({
+    open,
+    idBase = "bkl-dialog",
+    title,
+    tone = "accent",
+    body,
+    foot,
+    ack,
+    confirmWord,
+    consequence,
+    yes,
+    cancelText,
+    busy = false,
+    busyText,
+    onAccept,
+    onClose,
+  }) {
     const titleId = `${idBase}-title`
     const bodyId = `${idBase}-body`
+    const reasonId = `${idBase}-reason`
     const nodeRef = useRef(null)
+    const [ackChecked, setAckChecked] = useState(false)
+    const [confirmInput, setConfirmInput] = useState("")
+
+    useEffect(() => {
+      if (open) {
+        setAckChecked(false)
+        setConfirmInput("")
+      }
+    }, [open])
+
     useEffect(() => {
       const element = nodeRef.current
       if (element === null || typeof element.showModal !== "function") return undefined
@@ -2220,6 +3403,82 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         element.removeEventListener("click", onClick)
       }
     }, [onClose])
+
+    const ackOk = !ack || ackChecked === true
+    const wordOk = !confirmWord || confirmInput.trim() === confirmWord
+    const canAccept = ackOk && wordOk && !busy
+
+    const dynamicReason = !ackOk
+      ? T.dialogGuardAckRequired
+      : !wordOk
+        ? T.dialogGuardWordRequired(confirmWord)
+        : (foot && typeof foot === "string" ? foot : T.dialogGuardReady)
+
+    const consequenceView = consequence
+      ? h("p", {
+          key: "consequence",
+          className: `bkl-consequence ${consequence.ok ? "ok" : "danger"}`,
+          style: merge(S.consequence, consequence.ok ? S.consequenceOk : S.consequenceDanger),
+        },
+        h(Icon, { name: consequence.ok ? "undo" : "alert", size: 15 }),
+        h("span", null, consequence.text))
+      : null
+
+    const ackView = ack
+      ? h("label", {
+          key: "ack",
+          className: `bkl-ack ${tone === "danger" || tone === "error" ? "danger" : ""}`,
+          style: merge(S.ackLabel, (tone === "danger" || tone === "error") && S.ackDanger, ackChecked && S.ackChecked),
+        },
+        h("input", {
+          type: "checkbox",
+          id: `${idBase}-ack`,
+          style: S.ackInput,
+          checked: ackChecked,
+          onChange: (e) => { setAckChecked(e.target.checked) },
+        }),
+        h("span", { style: S.ackText }, ack))
+      : null
+
+    const confirmWordView = confirmWord
+      ? h("div", { key: "confirmWord", style: S.confirmWordBox },
+          h("label", { htmlFor: `${idBase}-confirm`, style: S.confirmWordLabel },
+            T.dialogConfirmWordLabel(confirmWord)),
+          h("input", {
+            id: `${idBase}-confirm`,
+            className: "bkl-input",
+            style: merge(S.input, S.confirmWordInput),
+            autoComplete: "off",
+            spellCheck: false,
+            value: confirmInput,
+            placeholder: confirmWord,
+            onChange: (e) => { setConfirmInput(e.target.value) },
+          }))
+      : null
+
+    const footView = foot && !yes
+      ? foot
+      : [
+          (ack || confirmWord || (foot && typeof foot === "string"))
+            ? h("p", { key: "note", id: reasonId, style: S.dialogNote }, dynamicReason)
+            : null,
+          h(Button, {
+            key: "cancel",
+            kind: "quiet",
+            onClick: onClose,
+          }, cancelText || T.cancel),
+          yes
+            ? h(Button, {
+                key: "yes",
+                kind: (tone === "danger" || tone === "error") ? "danger" : "primary",
+                off: !canAccept,
+                reason: dynamicReason,
+                describedBy: reasonId,
+                onClick: () => { if (canAccept && onAccept) onAccept() },
+              }, busy ? (busyText || T.working) : yes)
+            : null,
+        ]
+
     return h("dialog", {
       ref: nodeRef,
       className: "bkl-dialog",
@@ -2233,8 +3492,12 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           h(Dot, { tone: tone ?? "accent" }),
           h("h3", { id: titleId, style: S.dialogTitle }, title),
           h(Button, { kind: "quiet", size: "small", label: T.dismissShort, onClick: onClose }, T.dismissShort)),
-        h("div", { id: bodyId, style: S.dialogBody }, body),
-        h("div", { style: S.dialogFoot }, foot)))
+        h("div", { id: bodyId, style: S.dialogBody },
+          body,
+          consequenceView,
+          ackView,
+          confirmWordView),
+        h("div", { style: S.dialogFoot }, footView)))
   }
 
   /** 词条原词 → 替换词 的成对展示；纯文本渲染，不把用户输入当 HTML。 */
@@ -2376,98 +3639,203 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       }))
   }
 
-  function OverviewPage({ f, status, override, step, busy, enabledPending, restart, onRun, onGo, onToggleEnabled, nextNotice, overviewNotice, restartView, words, guideOpen, onToggleGuide }) {
+  function OverviewPage({ f, status, override, step, busy, enabledPending, restart, onRun, onGo, onToggleEnabled, nextNotice, overviewNotice, restartView, words, guideOpen, onToggleGuide, onCopy }) {
     const target = status?.target ?? {}
     const rootHint = status?.hostRoot ? `${T.rootSource(status.hostRootSource)}${T.sep}${String(status.hostRoot)}` : T.rootMissingShort
     let preValue = T.unknown
     let preTone = "idle"
     if (f.rootMissing) { preValue = T.preNoRoot; preTone = "warn" } else if (f.broken) { preValue = T.preBroken; preTone = "error" } else if (f.blocked.length > 0) { preValue = T.preBlocked(f.blocked.length); preTone = "error" } else if (f.preCode === "ok") { preValue = T.preOk(f.pendingFiles); preTone = f.pendingFiles > 0 ? "accent" : "ok" }
     const activeRule = f.activeRule === null ? null : f.rules.find(rule => rule.id === f.activeRule)
-    const rulesValue = f.rules.length === 0
-      ? T.rulesNone
-      : f.activeRule === null ? T.rulesInactive(f.rules.length) : T.rulesActive(f.rules.length, activeRule?.name ?? f.activeRule)
     const takeoverOn = status?.enabled === true
     const warnings = Array.isArray(status?.permission?.warnings) ? status.permission.warnings : []
-    const injectBad = status?.inject && status.inject.ok === false
+    const isFullAccess = status?.mode === "danger-full-access"
+    const diagText = formatDiagnostics(status, f)
+    const actionCard = deriveActionCard(status, f)
+    const actionToneClass = actionCard.tone ? ` ${actionCard.tone}` : ""
+    const steps = flowSteps(status, f)
+
+    const wordsSummaryText = words?.phase !== "ready" || words?.stale
+      ? T.wordsSummaryFailed
+      : words?.entries?.length === 0 ? T.wordsSummaryEmpty : T.wordsSummaryCount(words?.entries?.length ?? 0)
 
     return h("div", { style: S.panel },
-      h(PageHead, { title: T.pageOverviewTitle, desc: T.pageOverviewDesc, titleId: "bkl-page-overview" }),
-      restart === null ? h(NextStepCard, { step, busy, onRun, notice: nextNotice }) : restartView,
-      // 首次使用步骤可收起：用得熟了以后不占地方，状态看上面的下一步卡。
-      h(Card, {
-        title: T.stepsTitle, titleId: "bkl-steps-title", desc: T.stepsDesc,
-        aside: h(Button, {
-          kind: "quiet", size: "small",
-          label: guideOpen ? T.guideHide : T.guideShow,
-          onClick: onToggleGuide,
-        }, guideOpen ? T.guideHide : T.guideShow),
-      },
-        guideOpen ? h(StepList, { items: stepItems(f), onGo }) : null),
-      h(Card, { title: T.statusTitle, titleId: "bkl-status-title", desc: T.statusDesc },
-        h(Rows, {
-          items: [
-            {
-              id: "host", label: T.rowHost, mono: Boolean(status?.hostRoot),
-              value: `${String(target.version ?? T.unknown)}${target.commit ? ` · ${String(target.commit).slice(0, 10)}` : ""}`,
-              hint: rootHint, tone: f.rootMissing ? "warn" : undefined,
-            },
-            { id: "mode", label: T.rowMode, value: modeLabel(f.mode), hint: T.rowModeHint },
-            {
-              id: "sandbox", label: T.rowSandbox, value: String(status?.mode ?? T.unknown),
-              hint: status?.mode === "danger-full-access" ? T.sandboxTakeover : T.sandboxHost,
-            },
-            { id: "preflight", label: T.rowPreflight, value: preValue, tone: preTone, hint: T.preHint },
-            f.applied === null
-              ? { id: "applied", label: T.rowApplied, value: T.appliedNone }
-              : {
-                id: "applied", label: T.rowApplied, mono: true,
-                value: T.appliedValue(f.applied.files ?? 0, formatTime(f.applied.updatedAt)),
-                hint: T.opId(String(f.applied.operationId ?? T.unknown)),
+      // 1. 顶部调用 PageHead（page: "overview"）
+      h(PageHead, { page: "overview", title: T.pageOverviewTitle, desc: T.pageOverviewDesc, titleId: "bkl-page-overview" }),
+
+      // 2. 渲染 4 阶段进度条（ol.bkl-flow）
+      h("ol", { className: "bkl-flow", "aria-label": T.overviewFlowLabel },
+        steps.map(([title, state, sub], index) => {
+          const isCurrent = state === "current" || state === "blocked"
+          return h("li", { key: String(index), className: state, "aria-current": isCurrent ? "step" : undefined },
+            h("span", { className: "bkl-flow-num", "aria-hidden": "true" },
+              state === "done" ? h(Icon, { name: "check", size: 13 }) : state === "blocked" ? "!" : String(index + 1)),
+            h("div", { style: { minWidth: 0, flex: "1 1 auto" } },
+              h("strong", null, title),
+              h("span", { className: "bkl-sub" }, sub)))
+        })),
+
+      // 3. 渲染双栏响应式网格（div.bkl-columns）
+      h("div", { className: "bkl-columns" },
+        // 左栏
+        h("div", { style: { display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 } },
+          // a. 主行动卡片（section.bkl-action-card）
+          h("section", { className: `bkl-action-card${actionToneClass}`, "aria-labelledby": "bkl-action-title" },
+            h("div", { className: "bkl-action-eyebrow" },
+              h("span", { className: "bkl-icon-wrap" }, h(Icon, { name: actionCard.icon, size: 14 })),
+              actionCard.label),
+            h("h2", { id: "bkl-action-title" }, actionCard.title),
+            h("p", null, actionCard.body),
+            h("div", { className: "bkl-action-actions" },
+              h(Button, {
+                kind: "primary",
+                off: busy,
+                reason: T.whyBusy,
+                onClick: () => { onRun(actionCard.action) },
+              }, actionCard.button)),
+            nextNotice ?? null),
+
+          // 重启通知展示
+          restart !== null ? restartView : null,
+
+          // b. 首次向导（若初次使用，支持折叠）
+          h(Card, {
+            title: T.stepsTitle, titleId: "bkl-steps-title", desc: T.stepsDesc,
+            aside: h(Button, {
+              kind: "quiet", size: "small",
+              label: guideOpen ? T.guideHide : T.guideShow,
+              onClick: onToggleGuide,
+            }, guideOpen ? T.guideHide : T.guideShow),
+          },
+            guideOpen ? h(StepList, { items: stepItems(f), onGo }) : null),
+
+          // c. 核心配置清单（div.bkl-summary-list，包含提示词模式、长期规则、目标词库、破限接管开关 Switch，支持就地切换）
+          h(Card, { title: T.overviewConfigTitle, titleId: "bkl-config-title", desc: T.overviewConfigDesc },
+            h("div", { className: "bkl-summary-list" },
+              // 1) 提示词模式
+              h("div", { className: "bkl-summary-row" },
+                h("span", { className: "bkl-summary-icon" }, h(Icon, { name: "text", size: 18 })),
+                h("div", { className: "bkl-summary-content" },
+                  h("div", { className: "bkl-summary-label" }, T.rowMode),
+                  h("strong", null, modeLabel(f.mode)),
+                  h("p", null, f.customPrompt ? T.promptMineSummary : T.promptBuiltinSummary)),
+                h(Button, { kind: "quiet", size: "small", onClick: () => { onGo("prompt") } }, T.adjustPrompt)),
+              // 2) 长期规则
+              h("div", { className: "bkl-summary-row" },
+                h("span", { className: "bkl-summary-icon" }, h(Icon, { name: "file", size: 18 })),
+                h("div", { className: "bkl-summary-content" },
+                  h("div", { className: "bkl-summary-label" }, T.rowRules),
+                  h("strong", null, f.rulesIndex === "corrupt" ? T.rulesCorruptShort : activeRule ? (activeRule.name || activeRule.id) : T.rulesNoneShort),
+                  h("p", null, f.rulesIndex === "corrupt" ? T.rulesCorruptSummary : activeRule ? T.rulesActiveSummary(activeRule.target) : T.rulesInactiveSummary)),
+                h(Button, { kind: "quiet", size: "small", onClick: () => { onGo("rules") } }, f.rulesIndex === "corrupt" ? T.viewDetails : T.manageRules)),
+              // 3) 目标词库
+              h("div", { className: "bkl-summary-row" },
+                h("span", { className: "bkl-summary-icon" }, h(Icon, { name: "dictionary", size: 18 })),
+                h("div", { className: "bkl-summary-content" },
+                  h("div", { className: "bkl-summary-label" }, T.rowWords),
+                  h("strong", null, wordsSummaryText),
+                  h("p", null, T.wordsSummaryHint)),
+                h(Button, { kind: "quiet", size: "small", onClick: () => { onGo("words") } }, T.manageWords)),
+              // 4) 破限接管开关 Switch，支持就地切换
+              h("div", { className: "bkl-summary-row" },
+                h("span", { className: "bkl-summary-icon" }, h(Icon, { name: "bolt", size: 18 })),
+                h("div", { className: "bkl-summary-content" },
+                  h("div", { className: "bkl-summary-label" }, h(Term, { termKey: "takeover", label: T.rowTakeover })),
+                  h("strong", null, takeoverOn ? T.takeoverStateOn : T.takeoverStateOff),
+                  h("p", { id: "bkl-row-takeover-hint" }, T.takeoverHint)),
+                h(Switch, {
+                  on: takeoverOn,
+                  off: busy || enabledPending,
+                  label: T.takeoverLabel,
+                  describedBy: "bkl-row-takeover-hint",
+                  onToggle: onToggleEnabled,
+                }))),
+            overviewNotice ?? null),
+
+          // 权限警告条
+          warnings.length === 0
+            ? null
+            : h("section", { role: "note", style: merge(S.banner, { background: tk.warnSoft }) },
+              h("div", { style: S.bannerHead }, h(Dot, { tone: "warn" }), h("h3", { style: S.bannerTitle }, T.warnTitle)),
+              h("ul", { style: S.ol },
+                warnings.map((warning, index) => h("li", { key: `w${String(index)}` },
+                  warning?.code === "preset_approval_never"
+                    ? T.warnPresetNever(warning.preset ?? "")
+                    : warning?.code === "default_policy_never" ? T.warnPolicyNever : T.warnOther(warning?.code ?? "")))),
+              h("p", { style: S.small }, T.warnNext))),
+
+        // 右栏
+        h("div", { style: { display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 } },
+          // a. 环境与权限卡片（div.bkl-status-lines，包含宿主版本、提示词模式、实际权限、预检状态、宿主路径）
+          h(Card, { title: T.overviewEnvTitle, titleId: "bkl-status-title" },
+            h("div", { className: "bkl-status-lines" },
+              h("div", null,
+                h("span", { className: "bkl-status-key" }, h(Term, { termKey: "host", label: T.rowHost })),
+                h("span", { style: S.mono }, `${String(target.version ?? T.unknown)}${target.commit ? ` · ${String(target.commit).slice(0, 10)}` : ""}`)),
+              h("div", null,
+                h("span", { className: "bkl-status-key" }, T.rowMode),
+                h("span", null, modeLabel(f.mode))),
+              h("div", null,
+                h("span", { className: "bkl-status-key" }, T.rowSandbox),
+                h(Tag, { tone: isFullAccess ? "warn" : undefined }, isFullAccess ? T.sandboxFullAccess : T.sandboxHostDefault)),
+              h("div", null,
+                h("span", { className: "bkl-status-key" }, h(Term, { termKey: "preflight", label: T.rowPreflight })),
+                h(Tag, { tone: preTone }, preValue)),
+              h("div", null,
+                h("span", { className: "bkl-status-key" }, h(Term, { termKey: "patch", label: T.rowApplied })),
+                h("span", null, f.applied === null ? T.appliedNone : T.appliedValue(f.applied.files ?? 0, formatTime(f.applied.updatedAt))))),
+            h("div", {
+              style: {
+                padding: "9px 11px",
+                background: "var(--dsw-alias-bg-layer-2, #f7f8fa)",
+                border: "0.5px solid var(--dsw-alias-border-l2, #e1e5eb)",
+                borderRadius: "7px",
+                overflowWrap: "anywhere",
+                fontFamily: "var(--dsw-font-mono, monospace)",
+                fontSize: "11px",
+                lineHeight: 1.6,
+                marginTop: "12px",
+                color: "var(--dsw-alias-label-secondary)",
               },
-            { id: "rules", label: T.rowRules, value: rulesValue, tone: f.activeRule === null ? undefined : "ok" },
-            {
-              id: "words", label: T.rowWords,
-              value: words.phase !== "ready" || words.stale
-                ? T.wordsSummaryFailed
-                : words.entries.length === 0 ? T.wordsSummaryEmpty : T.wordsSummaryCount(words.entries.length),
-              tone: words.phase !== "ready" || words.stale ? "warn" : undefined,
-              hint: T.wordsSummaryHint,
-              control: h(Button, { size: "small", label: T.manageWords, onClick: () => { onGo("words") } }, T.manageWords),
-            },
-            {
-              id: "prompt", label: T.rowPrompt,
-              value: f.customPrompt ? T.promptMine(formatBytes(override?.bytes)) : T.promptBuiltin,
-              tone: injectBad ? "warn" : undefined,
-              hint: injectBad ? T.injectBad(status.inject.code) : undefined,
-            },
-            {
-              id: "takeover", label: T.rowTakeover, value: T.takeoverState(takeoverOn), hint: T.takeoverHint,
-              control: h(Switch, {
-                on: takeoverOn,
-                off: busy || enabledPending,
-                label: T.takeoverLabel,
-                describedBy: "bkl-row-takeover-hint",
-                onToggle: onToggleEnabled,
-              }),
-            },
-          ],
-        }),
-        overviewNotice ?? null),
-      warnings.length === 0
-        ? null
-        : h("section", { role: "note", style: merge(S.banner, { background: tk.warnSoft }) },
-          h("div", { style: S.bannerHead }, h(Dot, { tone: "warn" }), h("h3", { style: S.bannerTitle }, T.warnTitle)),
-          h("ul", { style: S.ol },
-            warnings.map((warning, index) => h("li", { key: `w${String(index)}` },
-              warning?.code === "preset_approval_never"
-                ? T.warnPresetNever(warning.preset ?? "")
-                : warning?.code === "default_policy_never" ? T.warnPolicyNever : T.warnOther(warning?.code ?? "")))),
-          h("p", { style: S.small }, T.warnNext)))
+            }, rootHint),
+            h("p", { style: merge(S.small, { marginTop: "10px", color: "var(--dsw-alias-label-tertiary)" }) }, T.overviewEnvDesc)),
+
+          // b. 生效时机指南卡片（展示补丁/提示词/规则/词库四项改动的生效时机）
+          h(Card, { title: T.overviewEffectTitle, titleId: "bkl-timing-title" },
+            h("div", { style: { display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 14px", fontSize: "12px" } },
+              h("span", { style: { color: "var(--dsw-alias-label-tertiary)", fontWeight: 550 } }, T.overviewEffectPatches),
+              h("span", { style: { color: "var(--dsw-alias-label-primary)" } }, T.overviewEffectPatchesDesc),
+              h("span", { style: { color: "var(--dsw-alias-label-tertiary)", fontWeight: 550 } }, T.overviewEffectPrompt),
+              h("span", { style: { color: "var(--dsw-alias-label-primary)" } }, T.overviewEffectPromptDesc),
+              h("span", { style: { color: "var(--dsw-alias-label-tertiary)", fontWeight: 550 } }, T.overviewEffectRules),
+              h("span", { style: { color: "var(--dsw-alias-label-primary)" } }, T.overviewEffectRulesDesc),
+              h("span", { style: { color: "var(--dsw-alias-label-tertiary)", fontWeight: 550 } }, T.overviewEffectWords),
+              h("span", { style: { color: "var(--dsw-alias-label-primary)" } }, T.overviewEffectWordsDesc))),
+
+          // c. 技术诊断折叠块（details.bkl-disclosure，调用 formatDiagnostics(status, f) 展示脱敏文本，包含一键复制按钮与「含本机路径，不含凭据」提示）
+          h("details", { className: "bkl-disclosure" },
+            h("summary", null, T.overviewDiagTitle),
+            h("pre", { style: merge(S.codeBlock, { whiteSpace: "pre-wrap", marginTop: "10px", fontSize: "11px", lineHeight: 1.6 }) }, diagText),
+            h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "10px", flexWrap: "wrap" } },
+              h("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)" } }, T.overviewDiagNote),
+              h(Button, {
+                size: "small",
+                kind: "quiet",
+                onClick: () => {
+                  if (typeof onCopy === "function") {
+                    onCopy(diagText)
+                  } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+                    void navigator.clipboard.writeText(diagText)
+                  }
+                },
+              },
+                h(Icon, { name: "copy", size: 13 }),
+                " ",
+                T.overviewDiagCopy))))))
   }
 
   // ---- 补丁 -----------------------------------------------------------------
 
-  function PatchCard({ patch, f, pendingValue, busy, onToggle }) {
+  function PatchRowItem({ patch, f, pendingValue, busy, onToggle, onGo }) {
     const [open, setOpen] = useState(false)
     const key = safeId(patch.id)
     const on = pendingValue === undefined ? patch.enabled === true : pendingValue
@@ -2477,113 +3845,298 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const human = pickLang(patch.human)
     const note = pickLang(patch.notes)
     const targets = Array.isArray(patch.targets) ? patch.targets : []
-    const files = unique(targets.map(target => String(target?.path ?? ""))).length
-    return h("li", { style: S.patch },
-      h("div", { style: S.patchHead },
-        h("div", { style: S.patchMain },
-          h("div", { style: S.row },
-            h("span", { id: `bkl-p-${key}-title`, style: S.patchTitle }, title),
-            h(Tag, null, patch.kind === "replace" ? T.kindReplace : T.kindVerify)),
-          human ? h("p", { style: S.text }, human) : null),
-        h("div", { style: S.patchSwitch },
+    const filePaths = unique(targets.map(target => String(target?.path ?? "")).filter(Boolean))
+    const filesCount = filePaths.length
+
+    // 模式门禁：minimal.unfreeze 在推荐模式下置灰并显示「仅完全解放」及跳转链接
+    const isUnrestrictedPatch = patch.id === "minimal.unfreeze" || patch.unrestricted === true
+    const disabledByMode = isUnrestrictedPatch && f.mode !== "unrestricted"
+
+    const eligible = !disabledByMode
+    const selected = on && eligible
+
+    // 模块特征图标映射
+    const iconMap = {
+      "output.trim": "terminal",
+      "read.limits": "file",
+      "web.framing": "code",
+      "workspace.authority": "shield",
+      "minimal.unfreeze": "bolt",
+    }
+    const iconName = iconMap[patch.id] || (patch.unrestricted ? "bolt" : "file")
+
+    // 磁盘状态胶囊徽章（已就位、待写入、有冲突、未应用）
+    let diskBadgeText = T.diskUnapplied
+    let diskTone = undefined
+    if (f.rootMissing) {
+      diskBadgeText = T.diskUnchecked
+      diskTone = "warn"
+    } else if (disk === "blocked") {
+      diskBadgeText = T.diskConflict
+      diskTone = "error"
+    } else if (disk === "ready") {
+      diskBadgeText = T.diskInPlace
+      diskTone = "ok"
+    } else if (disk === "pending" || (selected && disk !== "ready")) {
+      diskBadgeText = T.diskPending
+      diskTone = "accent"
+    }
+
+    const rowClasses = [
+      "bkl-patch-row",
+      !eligible ? "inactive" : "",
+      selected ? "selected" : "",
+    ].filter(Boolean).join(" ")
+
+    return h("article", { className: rowClasses, id: `bkl-patch-row-${key}` },
+      h("div", { style: { display: "flex", gap: "14px", alignItems: "flex-start" } },
+        // 左侧模块特征图标
+        h("div", { className: "bkl-patch-icon" },
+          h(Icon, { name: iconName, size: 18 })),
+        // 中间内容区
+        h("div", { style: { flex: "1 1 auto", minWidth: 0 } },
+          h("h3", { style: { fontSize: "14px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", margin: 0, fontWeight: 600 } },
+            h("span", { id: `bkl-p-${key}-title` }, title),
+            isUnrestrictedPatch ? h(Tag, { tone: "warn" }, T.onlyUnrestricted) : null,
+            patch.kind === "replace" ? h(Tag, null, T.kindReplace) : null),
+          human ? h("p", { style: merge(S.text, { margin: "3px 0 10px", fontSize: "13px" }) }, human) : null,
+          // 状态胶囊徽章与文件数与模式切换链接
+          h("div", { style: { display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", fontSize: "11px", color: "var(--dsw-alias-label-tertiary)" } },
+            h(Tag, { tone: diskTone }, diskBadgeText),
+            h("span", null, T.touchesFiles(filesCount)),
+            disabledByMode ? h("button", {
+              type: "button",
+              className: "bkl-link",
+              style: { border: 0, background: "none", color: "var(--dsw-alias-state-business-primary)", padding: 0, cursor: "pointer", fontSize: "12px", textDecoration: "underline" },
+              onClick: () => { if (onGo) onGo("prompt") },
+            }, T.switchModeToSelect) : null),
+          // 折叠改动说明与涉及文件清单
+          h("details", { className: "bkl-disclosure" },
+            h("summary", null, T.patchDisclosureSummary),
+            note ? h("p", { style: merge(S.text, { marginTop: "8px", fontSize: "12px" }) }, note) : null,
+            h("ul", { className: "bkl-file-list" },
+              filePaths.map((p, idx) => h("li", { key: String(idx) },
+                h(Icon, { name: "file", size: 14 }),
+                h("span", null, p)))),
+            targets.length > 0
+              ? targets.map((target, idx) => typeof target?.before === "string" ? h("div", { key: `tgt-${String(idx)}`, style: { marginTop: "8px" } },
+                h("span", { style: S.caption }, `${String(target.path ?? "")} (${T.before}):`),
+                h("pre", { style: merge(S.codeBlock, { margin: "4px 0" }) }, target.before),
+                h("span", { style: S.caption }, `${String(target.path ?? "")} (${T.after}):`),
+                h("pre", { style: merge(S.codeBlock, { margin: "4px 0" }) }, target.after)) : null)
+              : null)),
+        // 右侧开关控件与提示
+        h("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "5px", paddingTop: "2px", flexShrink: 0, minWidth: "68px" } },
           h(Switch, {
             on,
-            off: busy || toggling,
+            off: busy || toggling || disabledByMode,
             labelledBy: `bkl-p-${key}-title`,
             describedBy: `bkl-p-${key}-hint`,
             onToggle: (next) => { onToggle(patch.id, next) },
           }),
-          h("span", { id: `bkl-p-${key}-hint`, style: S.switchHint }, toggling ? T.saving : on ? T.switchOnHint : T.switchOffHint))),
-      h("div", { style: S.patchMeta },
-        h("span", { style: S.metaItem }, h(Dot, { tone: DISK_TONE[disk] }), h("span", { style: { color: disk === "blocked" ? tk.error : tk.label2 } }, T.diskState(disk))),
-        h("span", { "aria-hidden": "true" }, "\u00b7"),
-        h("span", null, T.touchesFiles(files)),
-        h("span", { style: S.spacer }),
-        h(Button, {
-          kind: "quiet", size: "small", expanded: open, controls: `bkl-p-${key}-detail`,
-          onClick: () => { setOpen(!open) },
-        }, open ? T.detailsHide : T.detailsShow)),
-      !on && f.applied !== null ? h("p", { style: S.inlineNote }, T.offButWritten) : null,
-      h("div", { id: `bkl-p-${key}-detail`, hidden: !open, className: open ? "bkl-fade" : undefined, style: merge(S.detail, !open && { display: "none" }) },
-        note ? h("div", { style: S.detailBlock }, h("span", { style: S.fieldLabel }, T.whyLabel), h("p", { style: S.text }, note)) : null,
-        targets.map((target, index) => h("div", { key: `t${String(index)}`, style: S.detailBlock },
-          h("span", { style: S.targetPath }, String(target?.path ?? "")),
-          typeof target?.before === "string" ? h("span", { style: S.caption }, T.before) : null,
-          typeof target?.before === "string" ? h("pre", { style: S.codeBlock }, target.before) : null,
-          typeof target?.after === "string" ? h("span", { style: S.caption }, T.after) : null,
-          typeof target?.after === "string" ? h("pre", { style: S.codeBlock }, target.after) : null))))
+          h("span", { id: `bkl-p-${key}-hint`, style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)" } },
+            toggling ? T.saving : disabledByMode ? T.modeDisabledHint : on ? T.switchOnHint : T.switchOffHint))))
   }
 
-  function PatchesPage({ f, patchInfo, patchError, busy, toggles, onToggle, onApply, onRevert, onRun, onCopy, noticeView, restartView }) {
+  const PatchCard = PatchRowItem
+
+  function PatchesPage({ f, patchInfo, patchError, busy, toggles, onToggle, onApply, onRevert, onRun, onCopy, onGo, noticeView, restartView }) {
     const applyWhy = applyReason(f, busy, toggles)
     const revertWhy = revertReason(f, busy)
-    const findingFor = (item) => f.findings.find(finding => finding?.patchId === item?.patchId && finding?.path === item?.path)
     const blockedText = f.blocked.map(item => `${String(item?.patchId ?? "")} · ${String(item?.path ?? "")} · ${String(item?.reason ?? "")}`).join("\n")
+    const isBlocked = f.blocked.length > 0
+    const footStatusText = isBlocked
+      ? T.patchFootBlocked
+      : f.pendingFiles > 0
+        ? T.patchFootPending(f.pendingFiles)
+        : T.patchFootNone
 
     return h("div", { style: S.panel },
+      // 1. 顶部 PageHead（带有已选数量徽章与 PageTip）
       h(PageHead, {
-        title: T.pagePatchesTitle, desc: T.pagePatchesDesc, titleId: "bkl-page-patches",
+        page: "patches",
+        title: T.pagePatchesTitle,
+        desc: [
+          T.patchesHeadPrefix,
+          h(Term, { termKey: "patch" }),
+          T.patchesHeadMid,
+          h(Term, { termKey: "host" }),
+          T.patchesHeadSuffix,
+        ] ?? T.pagePatchesDesc,
+        titleId: "bkl-page-patches",
         when: T.whenRestart,
+        aside: h(Tag, { tone: f.enabledCount > 0 ? "accent" : undefined }, T.patchesSelectedBadge(f.enabledCount)),
       }),
+
       restartView ?? null,
-      h(Card, { title: T.patchesTitle, titleId: "bkl-patches-title", desc: T.patchesLead },
-        h("ul", { style: S.legend },
-          h("li", { style: S.legendItem }, h("span", { style: S.legendKey }, T.legendSwitch), T.legendSwitchDesc),
-          h("li", { style: S.legendItem }, h("span", { style: S.legendKey }, T.legendDisk), T.legendDiskDesc)),
-        f.total > 0 ? h("p", { style: S.small }, T.patchesSummary(f.enabledCount, f.total, patchInfo?.files ?? 0)) : null),
-      f.blocked.length === 0
-        ? null
-        : h("section", { role: "alert", style: merge(S.banner, { background: tk.errorSoft }) },
-          h("div", { style: S.bannerHead }, h(Dot, { tone: "error" }), h("h3", { style: S.bannerTitle }, T.blockedTitle(f.blocked.length))),
-          h("p", { style: S.text }, T.blockedBody),
-          h(PathList, { items: f.blocked.map(item => `${String(item?.patchId ?? "")} · ${String(item?.path ?? "")} \u2014 ${T.findingState(findingFor(item)?.state)}`) }),
-          h("div", { style: S.row }, h(Button, { size: "small", onClick: () => { onCopy(blockedText) } }, T.copyList))),
+
+      // 2. 阻断与未配目录 Notice
+      isBlocked
+        ? h(Notice, {
+          tone: "error",
+          title: T.blockedNoticeTitle(f.blocked.length),
+          body: T.blockedNoticeBody,
+          data: T.dataProtectedDisk,
+          actions: h("div", { style: S.row },
+            h(Button, { size: "small", kind: "primary", onClick: () => { onRun("blockedHelp") } }, T.viewBlockReason),
+            h(Button, { size: "small", onClick: () => { onRun("refresh") } }, T.recheckSource),
+            h(Button, { size: "small", onClick: () => { onCopy(blockedText) } }, T.copyList)),
+        })
+        : null,
+
       f.rootMissing || f.broken
         ? h(Notice, {
-          notice: { tone: f.broken ? "error" : "warn", title: f.broken ? T.nsBrokenTitle : T.nsRootTitle, next: f.broken ? T.whyBroken : T.whyNoRoot, action: "goOverview" },
+          tone: f.broken ? "error" : "warn",
+          title: f.broken ? T.nsBrokenTitle : T.nsRootTitle,
+          body: f.broken ? T.whyBroken : T.whyNoRoot,
+          data: T.dataProtectedDisk,
+          action: "goOverview",
           onAction: onRun,
         })
         : null,
+
+      // 3. 区块分界小标题（.bkl-section-label）
+      h("div", { className: "bkl-section-label" },
+        h("span", null, T.sourcePatchesLabel),
+        h("span", null, `${T.currentPromptModePrefix}${modeLabel(f.mode)}`)),
+
+      // 4. 补丁统一外壳（section.bkl-patch-list）
       f.total === 0
         ? h(Empty, {
           title: T.patchesEmptyTitle,
           body: patchError ? `${patchError.title}${T.sep}${patchError.next}` : undefined,
           action: h(Button, { kind: "primary", onClick: () => { onRun("retry") } }, T.retry),
         })
-        : h("ul", { style: S.list, "aria-labelledby": "bkl-patches-title" },
-          f.patches.map(patch => h(PatchCard, { key: patch.id, patch, f, pendingValue: toggles[patch.id], busy, onToggle }))),
-      h("div", { style: S.actionBar },
-        noticeView ?? null,
-        h("div", { style: S.row },
-          h(Button, { kind: "primary", off: applyWhy !== null, reason: applyWhy, describedBy: "bkl-apply-why", onClick: onApply },
-            f.pendingFiles > 0 ? T.applyN(f.pendingFiles) : T.apply),
-          h(Button, { kind: "quietDanger", off: revertWhy !== null, reason: revertWhy, describedBy: "bkl-revert-why", onClick: onRevert }, T.revert)),
-        h("p", { id: "bkl-apply-why", style: S.small }, applyWhy ?? T.applyHint),
-        h("p", { id: "bkl-revert-why", style: S.small }, revertWhy ?? T.revertHint(f.applied?.files ?? 0))))
+        : h("section", { className: "bkl-patch-list", "aria-label": T.patchesTitle },
+          f.patches.map(patch => h(PatchRowItem, {
+            key: patch.id,
+            patch,
+            f,
+            pendingValue: toggles[patch.id],
+            busy,
+            onToggle,
+            onGo,
+          }))),
+
+      noticeView ?? null,
+
+      // 5. 悬浮固定底部操作栏（footer.bkl-sticky-footer）
+      h("footer", { className: "bkl-sticky-footer" },
+        h("div", { className: `bkl-foot-copy ${isBlocked ? "blocked" : ""}` },
+          h("strong", null, footStatusText),
+          h("div", { className: "bkl-foot-reason" }, applyWhy ?? T.patchFootReasonDefault)),
+        h("div", { style: { display: "flex", alignItems: "center", gap: "10px", marginLeft: "auto" } },
+          h(Button, {
+            kind: "quietDanger",
+            off: revertWhy !== null,
+            reason: revertWhy,
+            onClick: onRevert,
+          }, T.revert),
+          h(Button, {
+            kind: "primary",
+            off: applyWhy !== null,
+            reason: applyWhy,
+            onClick: onApply,
+          },
+            busy ? h("span", { className: "bkl-spinner", style: { marginRight: "6px", width: "12px", height: "12px", display: "inline-block" } }) : null,
+            f.pendingFiles > 0 ? T.applyN(f.pendingFiles) : T.apply))))
   }
 
   // ---- 提示词与规则 ---------------------------------------------------------
 
   function ModeBlock({ mode, pendingMode, onPick, noticeView }) {
-    const options = MODES.map(id => {
-      const recommended = id === "recommended"
-      return {
-        id,
-        descId: `bkl-mode-${id}-desc`,
-        title: modeLabel(id),
-        tags: [
-          recommended ? h(Tag, { key: "d" }, T.tagDefault) : null,
-          id === mode ? h(Tag, { key: "c", tone: "ok" }, T.tagCurrent) : null,
-          id === pendingMode ? h(Tag, { key: "p", tone: "accent" }, T.tagPending) : null,
-        ],
-        body: h("span", { id: `bkl-mode-${id}-desc`, style: { display: "flex", flexDirection: "column", gap: "2px" } },
-          h("span", { style: S.text }, recommended ? T.modeRecFit : T.modeUnrFit),
-          h("span", { style: S.small }, recommended ? T.modeRecChange : T.modeUnrChange)),
-      }
-    })
     return h(Card, { title: T.modeTitle, titleId: "bkl-mode-title", desc: T.modeDesc },
-      h(RadioCards, { group: "mode", labelledBy: "bkl-mode-title", options, value: mode, onSelect: onPick }),
+      h("div", { className: "mode-grid" },
+        MODES.map((id) => {
+          const isSelected = id === mode
+          const recommended = id === "recommended"
+          const titleContent = id === "unrestricted"
+            ? h(Term, { termKey: "unrestricted", label: modeLabel(id) })
+            : modeLabel(id)
+
+          const tags = [
+            recommended ? h(Tag, { key: "d" }, T.tagDefault) : null,
+            isSelected ? h(Tag, { key: "c", tone: "ok" }, T.tagCurrent) : null,
+            id === pendingMode ? h(Tag, { key: "p", tone: "accent" }, T.tagPending) : null,
+          ].filter(Boolean)
+
+          return h("div", {
+            key: id,
+            className: `mode-card ${isSelected ? "selected" : ""}`,
+            "data-mode": id,
+            role: "button",
+            tabIndex: 0,
+            "aria-pressed": isSelected ? "true" : "false",
+            onClick: () => { onPick?.(id) },
+            onKeyDown: (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                onPick?.(id)
+              }
+            },
+          },
+            h("div", { className: "mode-head" },
+              h("div", { className: "mode-title" },
+                h(Icon, { name: recommended ? "checkCircle" : "zap", size: 16 }),
+                titleContent),
+              tags.length > 0 ? h("div", { style: S.row }, tags) : null),
+            h("div", { className: "tradeoff" },
+              h("span", { className: "tradeoff-good" }, recommended ? T.modeRecTradeoffGood : T.modeUnrTradeoffGood),
+              h("span", { className: "tradeoff-cost" }, recommended ? T.modeRecTradeoffCost : T.modeUnrTradeoffCost)),
+            h("div", { className: "mode-budget" },
+              h(Icon, { name: "clock", size: 13 }),
+              h("span", null, recommended ? T.modeRecBudget : T.modeUnrBudget)))
+        })),
       noticeView ?? null)
+  }
+
+  function ModeCompare({ currentMode = "recommended", targetMode = "unrestricted" }) {
+    const isCurRec = currentMode === "recommended"
+    const isTgtRec = targetMode === "recommended"
+
+    const timeoutCur = isCurRec ? T.modeCompareTimeoutRec : T.modeCompareTimeoutUnr
+    const timeoutTgt = isTgtRec ? T.modeCompareTimeoutRec : T.modeCompareTimeoutUnr
+    const outDepthCur = isCurRec ? T.modeCompareOutputDepthRec : T.modeCompareOutputDepthUnr
+    const outDepthTgt = isTgtRec ? T.modeCompareOutputDepthRec : T.modeCompareOutputDepthUnr
+    const constraintCur = isCurRec ? T.modeCompareRetained : T.modeCompareLifted
+    const constraintTgt = isTgtRec ? T.modeCompareRetained : T.modeCompareLifted
+
+    return h("table", { className: "bkl-compare compare" },
+      h("thead", null,
+        h("tr", null,
+          h("th", null, T.modeCompareItem),
+          h("th", null, T.modeCompareCurrent(modeLabel(currentMode))),
+          h("th", { className: "col-target" }, T.modeCompareNext(modeLabel(targetMode))))),
+      h("tbody", null,
+        h("tr", null,
+          h("td", null, T.modeCompareTimeout),
+          h("td", null, timeoutCur),
+          h("td", { className: "col-target" }, timeoutTgt)),
+        h("tr", null,
+          h("td", null, T.modeCompareOutputDepth),
+          h("td", null, outDepthCur),
+          h("td", { className: "col-target" }, outDepthTgt)),
+        h("tr", null,
+          h("td", null, T.modeCompareConstraint),
+          h("td", null, constraintCur),
+          h("td", { className: "col-target" }, constraintTgt))))
+  }
+
+  function modeSwitchDialogSpec(currentMode, targetMode, onConfirm) {
+    const label = modeLabel(targetMode)
+    const isUnrestricted = targetMode === "unrestricted"
+    return {
+      pick: targetMode,
+      title: T.confirmModeTitle(label),
+      consequence: { ok: true, text: T.confirmModeConsequence },
+      ack: isUnrestricted ? T.confirmModeAckUnrestricted : undefined,
+      body: h("div", { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+        h("p", { style: S.text }, T.confirmModeBody),
+        h(Notice, { tone: "info", title: T.modeNoticeSandboxKeep, body: T.modeNoticeSandboxKeepDesc }),
+        h(ModeCompare, { currentMode, targetMode })),
+      yes: T.confirmModeYes,
+      run: onConfirm,
+    }
   }
 
   function PromptBlock({ override, promptError, draft, setDraft, busy, onSave, onReset, onDiscard, onCopy, onRetry, noticeView }) {
@@ -2597,13 +4150,23 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const effectiveBad = override?.effective && override.effective.ok === false
     const saveWhy = !loaded ? T.whyPromptUnread : busy ? T.whyBusy : !dirty ? T.whyNoChange : value.trim() === "" ? T.whyEmptyPrompt : null
     const resetWhy = !loaded ? T.whyPromptUnread : busy ? T.whyBusy : !mine ? T.whyAlreadyBuiltin : null
+
+    const utf8Bytes = typeof TextEncoder !== "undefined"
+      ? new TextEncoder().encode(value).length
+      : utf8Length(value)
+
+    const reasonText = saveWhy ?? (busy ? T.promptSavingHint : dirty ? T.promptDirtyReason : T.saveHint)
+
     return h(Card, {
-      title: T.promptTitle,
+      className: dirty ? "editor-card dirty" : "editor-card",
+      title: h(Term, { termKey: "sharedPrompt", label: T.promptTitle }),
       titleId: "bkl-prompt-title",
       desc: T.promptDesc,
       descId: "bkl-prompt-desc",
-      aside: h(Tag, { tone: loaded ? (mine ? "accent" : undefined) : "error" },
-        loaded ? (mine ? T.promptUsingMine(formatBytes(override?.bytes)) : T.promptUsingBuiltin) : T.promptCountUnknown),
+      aside: h("div", { style: S.row },
+        dirty ? h(Tag, { tone: "warn" }, T.promptDirty) : null,
+        h(Tag, { tone: loaded ? (mine ? "accent" : undefined) : "error" },
+          loaded ? (mine ? T.promptUsingMine(formatBytes(override?.bytes)) : T.promptUsingBuiltin) : T.promptCountUnknown)),
     },
       promptError === null
         ? null
@@ -2624,15 +4187,15 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         onChange: (event) => { if (loaded) setDraft(event.target.value) },
       }),
       h("div", { style: S.row },
-        h("span", { style: S.caption }, loaded ? T.promptCount(value.length, formatBytes(utf8Length(value))) : T.promptCountUnknown),
+        h("span", { id: "prompt-count", style: S.caption },
+          loaded ? T.promptCountExact(value.length, utf8Bytes) : T.promptCountUnknown),
         dirty ? h(Tag, { tone: "warn" }, T.promptDirty) : null,
         h("span", { style: S.spacer }),
         dirty ? h(Button, { kind: "quiet", size: "small", onClick: () => { onDiscard?.() } }, T.discard) : null,
         h(Button, { kind: "quiet", size: "small", off: !loaded, reason: T.whyPromptUnread, onClick: () => { onCopy(value) } }, T.copyAll),
         h(Button, { kind: "quietDanger", size: "small", off: resetWhy !== null, reason: resetWhy, onClick: onReset }, T.resetBuiltin),
         h(Button, { kind: dirty ? "primary" : "plain", off: saveWhy !== null, reason: saveWhy, describedBy: "bkl-prompt-why", onClick: onSave }, T.save)),
-      h("p", { id: "bkl-prompt-why", style: S.small },
-        saveWhy ?? (busy ? T.promptSavingHint : T.saveHint)),
+      h("p", { id: "bkl-prompt-why", style: S.small }, reasonText),
       noticeView ?? null)
   }
 
@@ -2746,6 +4309,32 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const isCorrupt = rulesIndex === "corrupt"
     const newWhy = busy ? T.whyBusy : isCorrupt ? T.whyRulesCorrupt : null
     const selected = rules.find((rule) => rule.id === selectedId) ?? rules.find((rule) => rule.id === activeRule) ?? rules[0] ?? null
+
+    // 1. 损坏态（corrupt）：使用 StateBlock(tone: 'error') 居中渲染、包含文件路径透明度 disclosure 与数据安全声明
+    if (isCorrupt) {
+      return h(Card, {
+        title: T.rulesTitle,
+        titleId: "bkl-rules-title",
+        desc: T.rulesDesc,
+      },
+        h(StateBlock, {
+          tone: "error",
+          icon: "xCircle",
+          title: T.nsRulesCorruptTitle,
+          body: T.rulesCorruptNotice(rulesIndexPath || "breaklimit/rules.json"),
+          data: T.dataProtectedRulesBodies,
+          actions: [
+            h(Button, { kind: "primary", onClick: onRecover }, T.recoverRules),
+          ],
+          extra: h("details", { className: "bkl-disclosure", style: { marginTop: "14px", textAlign: "left", width: "100%", maxWidth: "460px" } },
+            h("summary", null, T.rulesFilesLocations),
+            h("ul", { className: "bkl-file-list" },
+              h("li", null, rulesIndexPath || "breaklimit/rules.json"),
+              h("li", null, "breaklimit/bodies/"))),
+        }),
+        noticeView ?? null)
+    }
+
     return h(Card, {
       title: T.rulesTitle,
       titleId: "bkl-rules-title",
@@ -2756,24 +4345,16 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           h(Tag, null, T.rulesCount(rules.length)),
           edit === null ? h(Button, { size: "small", off: newWhy !== null, reason: newWhy, onClick: onNew }, T.newRule) : null),
     },
-      isCorrupt
-        ? h(Notice, {
-          notice: {
-            tone: "error",
-            title: T.nsRulesCorruptTitle,
-            next: T.rulesCorruptNotice(rulesIndexPath),
-            action: "recoverRules",
-          },
-          onAction: onRecover,
-        })
-        : null,
-      // 清单读不出来时列表必然是空的，但「还没有规则」不成立：那是真的没有，
-      // 这里是读不到。两条提示同时出现，用户会以为新建一条就能修好。
-      rules.length === 0 && edit === null && !isCorrupt
-        ? h(Empty, {
+      // 清单正常但空规则且未在编辑时：居中渲染 StateBlock(empty)
+      rules.length === 0 && edit === null
+        ? h(StateBlock, {
+          tone: "empty",
+          icon: "info",
           title: T.rulesEmptyTitle,
           body: T.rulesEmptyBody,
-          action: h(Button, { kind: "primary", off: newWhy !== null, reason: newWhy, onClick: onNew }, T.newFirstRule),
+          actions: [
+            h(Button, { kind: "primary", off: newWhy !== null, reason: newWhy, onClick: onNew }, T.newFirstRule),
+          ],
         })
         : null,
       // 列表、详情、编辑是三个面：列表选中，详情看正文与操作，编辑只管改草稿。
@@ -2800,7 +4381,13 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                   active ? h(Tag, { tone: "ok" }, T.ruleActiveTag) : null)
               })),
             h("div", { style: S.helpBox },
-              h("p", { style: S.small }, T.rulesDesc),
+              h("p", { style: S.small }, [
+                T.rulesHeadPrefix,
+                h(Term, { termKey: "activate" }),
+                T.rulesHeadMid,
+                h(Term, { termKey: "instructions" }),
+                T.rulesHeadSuffix,
+              ] ?? T.rulesDesc),
               h(Button, {
                 kind: "quiet", size: "small", onClick: onRecover,
                 off: !isCorrupt, reason: T.whyRulesCorrupt,
@@ -2816,6 +4403,31 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       noticeView ?? null)
   }
 
+  function ruleDeleteDialogSpec(rule, onDelete) {
+    const label = rule?.name || rule?.id || ""
+    return {
+      tone: "danger",
+      title: T.confirmDeleteTitle(label),
+      consequence: { ok: false, text: T.confirmDeleteConsequence },
+      ack: T.confirmDeleteAck,
+      body: h("p", { style: S.text }, T.confirmDeleteBody),
+      yes: T.confirmDeleteYes,
+      run: typeof onDelete === "function" ? onDelete : () => {},
+    }
+  }
+
+  function recoverRulesDialogSpec(onRecover) {
+    return {
+      tone: "danger",
+      title: T.confirmRecoverRulesTitle,
+      confirmWord: T.confirmRecoverWord,
+      consequence: { ok: false, text: T.confirmRecoverConsequence },
+      body: h("p", { style: S.text }, T.confirmRecoverRulesBody),
+      yes: T.confirmRecoverRulesYes,
+      run: typeof onRecover === "function" ? onRecover : () => {},
+    }
+  }
+
   // ---- 词库页 ---------------------------------------------------------------
   //
   // 列表、搜索、新增/编辑/删除都在这里；本地预览只用已保存的词库，搜索不会改变
@@ -2829,6 +4441,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const lockReason = readFailed ? T.wordsReadFailedTitle : store.saving ? T.wordSavingNote : undefined
     const entries = store.entries
     const limits = store.limits
+    const isFull = entries.length >= limits.maxEntries
+    const addOff = isFull || locked
+    const addReason = isFull ? T.wordsLimitNote(limits.maxEntries) : lockReason
     const needle = query.trim().toLowerCase()
     const rows = entries
       .map((entry, index) => ({ entry, index }))
@@ -2842,6 +4457,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
             : T.wordsPreviewMiss
     return h("div", { style: S.panel },
       h(PageHead, {
+        page: "words",
         title: T.pageWordsTitle, desc: T.pageWordsDesc, titleId: "bkl-page-words",
         when: T.whenNewSession,
         aside: canReturn ? h(Button, { size: "small", onClick: onReturnChat }, T.wordsFromChatReturn) : null,
@@ -2852,6 +4468,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         titleId: "bkl-words-title",
         desc: T.wordsLead,
         descId: "bkl-words-lead",
+        aside: h("span", { style: merge(S.row, { gap: "6px" }) },
+          h(Term, { termKey: "takeover" }),
+          h(Term, { termKey: "host" })),
       },
         h("p", { style: S.small }, T.wordsScope)),
       readFailed
@@ -2865,6 +4484,15 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           onAction: () => { onRetryRead() },
         })
         : null,
+      isFull
+        ? h(Notice, {
+          notice: {
+            tone: "warn",
+            title: T.wordsLimitNoticeTitle(limits.maxEntries),
+            next: T.wordsLimitNoticeBody,
+          },
+        })
+        : null,
       noticeView ?? null,
       h("div", { style: S.wordLayout },
         h("section", { style: S.wordMain, "aria-labelledby": "bkl-words-list-title" },
@@ -2875,7 +4503,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
             h("span", { style: S.spacer }),
             h(Button, {
               kind: "primary", size: "small", label: T.wordsAdd,
-              off: locked, reason: lockReason,
+              off: addOff, reason: addReason,
               onClick: onAdd,
             }, T.wordsAdd)),
           entries.length >= limits.maxEntries
@@ -2908,7 +4536,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                 title: T.wordsEmptyTitle,
                 body: T.wordsEmptyBody,
                 action: h(Button, {
-                  kind: "primary", size: "small", off: locked, label: T.wordsEmptyAdd, onClick: onAdd,
+                  kind: "primary", size: "small", off: addOff, reason: addReason, label: T.wordsEmptyAdd, onClick: onAdd,
                 }, T.wordsEmptyAdd),
               })
               : rows.length === 0
@@ -2926,11 +4554,11 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                     h("div", { style: S.wordActions },
                       h(Button, {
                         kind: "quiet", size: "small", label: T.wordsEditLabel(item.entry.from),
-                        off: locked, onClick: () => { onEdit(item.index) },
+                        off: locked ? true : undefined, onClick: () => { onEdit(item.index) },
                       }, T.edit),
                       h(Button, {
                         kind: "quietDanger", size: "small", label: T.wordsDeleteLabel(item.entry.from),
-                        off: locked, onClick: () => { onDelete(item.index) },
+                        off: locked ? true : undefined, onClick: () => { onDelete(item.index) },
                       }, T.del))))),
           h("p", { style: S.small }, T.wordsEachSave)),
         h("aside", { style: merge(S.card, S.wordAside), "aria-labelledby": "bkl-words-preview-title" },
@@ -3409,17 +5037,12 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         if (dialog !== null && dialog.pick !== undefined) closeDialog()
         return
       }
-      const label = modeLabel(id)
-      openDialog({
-        pick: id,
-        title: T.confirmModeTitle(label),
-        body: h("p", { style: S.text }, T.confirmModeBody),
-        yes: T.confirmModeYes,
-        run: () => run("mode", async () => {
-          await post("/tier", { tier: id })
-          notify("mode", { tone: "ok", title: T.doneMode(label), next: T.doneModeNext })
-        }, true),
-      })
+      const spec = modeSwitchDialogSpec(f.mode, id, () => run("mode", async () => {
+        const label = modeLabel(id)
+        await post("/tier", { tier: id })
+        notify("mode", { tone: "ok", title: T.doneMode(label), next: T.doneModeNext })
+      }, true))
+      openDialog(spec)
     }
 
     const savePrompt = () => {
@@ -3603,38 +5226,31 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const askDelete = (rule) => {
       const label = rule.name || rule.id
       const active = rule.id === f.activeRule
-      openDialog({
-        tone: "danger",
-        title: T.confirmDeleteTitle(label),
-        body: h("p", { style: S.text }, active ? T.confirmDeleteActiveBody(rule.target) : T.confirmDeleteBody),
-        yes: T.confirmDeleteYes,
-        run: () => run("rules", async () => {
-          await post("/rules/delete", { id: rule.id })
-          if (!mounted.current) return
-          setRuleEdit(prev => (prev !== null && prev.id === rule.id ? null : prev))
-          setSelectedRuleId(prev => (prev === rule.id ? null : prev))
-          notify("rules", { tone: "ok", title: T.doneDeleted(label) })
-        }, true),
-      })
+      const spec = ruleDeleteDialogSpec(rule, () => run("rules", async () => {
+        await post("/rules/delete", { id: rule.id })
+        if (!mounted.current) return
+        setRuleEdit(prev => (prev !== null && prev.id === rule.id ? null : prev))
+        setSelectedRuleId(prev => (prev === rule.id ? null : prev))
+        notify("rules", { tone: "ok", title: T.doneDeleted(label) })
+      }, true))
+      if (active) {
+        spec.body = h("p", { style: S.text }, T.confirmDeleteActiveBody(rule.target))
+      }
+      openDialog(spec)
     }
 
     const askRecoverRules = (scope = "next") => {
-      openDialog({
-        tone: "danger",
-        title: T.confirmRecoverRulesTitle,
-        body: h("p", { style: S.text }, T.confirmRecoverRulesBody),
-        yes: T.confirmRecoverRulesYes,
-        run: () => run(scope, async () => {
-          const payload = await post("/rules/recover-corrupt", {})
-          const backupPath = payload.data?.backupPath ?? "dsh-breaklimit-backup"
-          notify(scope, {
-            tone: "ok",
-            title: T.doneRecoverRules,
-            next: T.doneRecoverRulesNext(backupPath),
-          })
-          await load()
-        }, true),
-      })
+      const spec = recoverRulesDialogSpec(() => run(scope, async () => {
+        const payload = await post("/rules/recover-corrupt", {})
+        const backupPath = payload.data?.backupPath ?? "dsh-breaklimit-backup"
+        notify(scope, {
+          tone: "ok",
+          title: T.doneRecoverRules,
+          next: T.doneRecoverRulesNext(backupPath),
+        })
+        await load()
+      }, true))
+      openDialog(spec)
     }
 
     // ---- 规则详情 ----
@@ -3865,6 +5481,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         onRun: runAction,
         onGo: goTab,
         onToggleEnabled: (next) => { void toggleEnabled(next) },
+        onCopy: (text) => { void copy(text, "overview") },
       })
     } else if (tab === "patches") {
       body = h(PatchesPage, {
@@ -3875,11 +5492,19 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         onRevert: askRevert,
         onRun: runAction,
         onCopy: (text) => { void copy(text, "patches") },
+        onGo: goTab,
       })
     } else if (tab === "prompt") {
       body = h("div", { style: S.panel },
         h(PageHead, {
-          title: T.pagePromptTitle, desc: T.pagePromptDesc, titleId: "bkl-page-prompt",
+          page: "prompt",
+          title: T.pagePromptTitle,
+          desc: [
+            T.promptHeadPrefix,
+            h(Term, { termKey: "sharedPrompt" }),
+            T.promptHeadSuffix,
+          ] ?? T.pagePromptDesc,
+          titleId: "bkl-page-prompt",
           when: T.whenNextTurn,
         }),
         restartView,
@@ -3901,7 +5526,16 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     } else if (tab === "rules") {
       body = h("div", { style: S.panel },
         h(PageHead, {
-          title: T.pageRulesTitle, desc: T.pageRulesDesc, titleId: "bkl-page-rules",
+          page: "rules",
+          title: T.pageRulesTitle,
+          desc: [
+            T.rulesHeadPrefix,
+            h(Term, { termKey: "activate" }),
+            T.rulesHeadMid,
+            h(Term, { termKey: "instructions" }),
+            T.rulesHeadSuffix,
+          ] ?? T.pageRulesDesc,
+          titleId: "bkl-page-rules",
           when: T.whenActivate,
         }),
         restartView,
@@ -3951,20 +5585,13 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       title: dialog?.title ?? "",
       tone: dialog?.tone === "danger" ? "error" : "accent",
       body: dialog?.body ?? null,
-      foot: [
-        dialog?.foot ? h("p", { key: "note", style: S.dialogNote }, dialog.foot) : null,
-        h(Button, { key: "cancel", kind: "quiet", onClick: closeDialog }, T.cancel),
-        dialog?.yes === undefined
-          ? null
-          : h(Button, {
-            key: "yes",
-            kind: dialog.tone === "danger" ? "danger" : "primary",
-            autofocus: true,
-            off: busy,
-            reason: T.whyBusy,
-            onClick: accept,
-          }, busy ? T.working : dialog.yes),
-      ],
+      foot: dialog?.foot ?? null,
+      ack: dialog?.ack,
+      confirmWord: dialog?.confirmWord,
+      consequence: dialog?.consequence,
+      yes: dialog?.yes,
+      busy,
+      onAccept: accept,
       onClose: closeDialog,
     })
 
@@ -4440,16 +6067,28 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     const from = fromInput.trim()
     const to = toInput.trim()
     const entries = aliasStore.state.entries
+    const limits = aliasStore.state.limits || { maxEntries: WORDS_MAX, maxTerm: WORD_TERM_MAX }
+    const isFull = entries.length >= limits.maxEntries
     const saving = aliasStore.state.saving
     const inputErrors = wordEntryErrors(fromInput, toInput, {
       originalFrom: null,
       entries,
-      maxEntries: aliasStore.state.limits.maxEntries,
-      maxTerm: aliasStore.state.limits.maxTerm,
+      maxEntries: limits.maxEntries,
+      maxTerm: limits.maxTerm,
     })
-    const canAdd = from !== "" && to !== "" && inputErrors.from === "" && inputErrors.to === "" && inputErrors.limit === "" && !saving
+    const canAdd = !isFull && from !== "" && to !== "" && inputErrors.from === "" && inputErrors.to === "" && inputErrors.limit === "" && !saving
     // 浮窗被拖窄以后，三个控件横排会把输入框挤到看不见：改成竖排。
     const stacked = dockRect.width < 360
+
+    const openSettings = () => {
+      // 进设置分区的词库页；分区没挂载就只给指引，不假装已经跳过去。
+      if (openWordsFromDock()) {
+        setOpen(false)
+        setNavHint(false)
+      } else {
+        setNavHint(true)
+      }
+    }
 
     const add = () => {
       if (!canAdd) return
@@ -4532,6 +6171,12 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
           },
             h("div", { style: ALIAS.titlebar, onPointerDown: (event) => { startGesture(event, "move") } },
               h("span", { style: ALIAS.title }, T.dockPopoverTitle),
+              h("span", {
+                style: merge(ALIAS.pill, {
+                  background: tier === "unrestricted" ? TONE_SOFT.warn : TONE_SOFT.info,
+                  color: tier === "unrestricted" ? TONE_COLOR.warn : TONE_COLOR.info,
+                }),
+              }, tier === "unrestricted" ? T.modeUnrestrictedShort : T.modeRecommendedShort),
               // 状态胶囊自带圆点：一个元素表达一件事，不再和独立圆点重复。
               h("span", {
                 style: merge(ALIAS.pill, {
@@ -4569,6 +6214,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                 "aria-pressed": tier === "unrestricted" ? "true" : "false",
                 onClick: () => { requestTier("unrestricted") },
               }, T.modeUnrestricted)),
+            h("p", { style: ALIAS.desc }, T.dockModeHint),
             pendingTier !== null
               ? h("div", { style: ALIAS.warnBox },
                   h("span", null, T.confirmModeTitle(modeLabel(pendingTier))),
@@ -4581,25 +6227,34 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
             h("div", { style: ALIAS.divider }),
 
             // 目标词表轻量管理
-            h("div", { style: ALIAS.subhead }, T.aliasTitle),
+            h("div", { style: ALIAS.head },
+              h("div", { style: ALIAS.subhead }, T.aliasTitle),
+              h("button", {
+                type: "button",
+                style: merge(ALIAS.remove, { color: tk.accent, cursor: "pointer", padding: "0 4px" }),
+                onClick: openSettings,
+              }, T.dockManageAllWords)),
             h("p", { style: ALIAS.desc }, T.aliasDesc),
             h("ul", { style: ALIAS.list },
               entries.length === 0
                 ? h("li", { style: ALIAS.emptyItem }, T.aliasEmptyList)
-                : entries.map((entry, index) => h("li", {
+                : entries.slice(0, 3).map((entry, index) => h("li", {
                     key: `${String(index)}:${entry.from}`,
                     style: index === 0 ? ALIAS.item : merge(ALIAS.item, ALIAS.itemDivider),
                   },
                   h("span", { style: ALIAS.pair, title: `${entry.from} \u2192 ${entry.to}` },
-                    entry.from,
+                    `${entry.from} `,
                     h("span", { style: ALIAS.arrow }, "\u2192"),
-                    entry.to),
+                    ` ${entry.to}`),
                   h("button", {
                     type: "button",
                     style: deletingIndex === index ? merge(ALIAS.remove, { color: tk.error, fontWeight: 600 }) : ALIAS.remove,
                     title: deletingIndex === index ? T.confirmDeleteAlias(entry.from) : undefined,
                     onClick: () => { removeAt(index) },
                   }, deletingIndex === index ? T.aliasConfirmDelete : T.aliasRemove)))),
+            entries.length > 3
+              ? h("p", { style: ALIAS.foot }, T.dockAliasLimitHint(entries.length))
+              : null,
             confirmFrom !== null
               ? h("div", { style: ALIAS.warnBox },
                   h("span", null, T.confirmOverwriteAlias(confirmFrom)),
@@ -4611,6 +6266,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                 placeholder: T.aliasFrom,
                 "aria-label": T.aliasFrom,
                 value: fromInput,
+                disabled: isFull ? true : undefined,
                 onChange: (event) => { setFromInput(event.target.value); setConfirmFrom(null) },
                 onKeyDown,
               }),
@@ -4619,6 +6275,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                 placeholder: T.aliasTo,
                 "aria-label": T.aliasTo,
                 value: toInput,
+                disabled: isFull ? true : undefined,
                 onChange: (event) => { setToInput(event.target.value) },
                 onKeyDown,
               }),
@@ -4626,8 +6283,10 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                 type: "button",
                 style: canAdd ? ALIAS.add : merge(ALIAS.add, ALIAS.addOff),
                 disabled: canAdd ? undefined : true,
+                "aria-disabled": canAdd ? undefined : "true",
                 onClick: add,
               }, T.aliasAdd)),
+            h("p", { style: ALIAS.desc }, T.dockAliasInlineDefault),
             writeState === null
               ? null
               : h("p", { style: writeState.tone === "ok" ? ALIAS.foot : ALIAS.fail }, `${String(writeState.title)}${T.sep}${String(writeState.next)}`),
@@ -4635,21 +6294,14 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
               ? null
               : h("p", { style: ALIAS.fail }, inputErrors.from || inputErrors.to || inputErrors.limit),
             navHint ? h("p", { style: ALIAS.foot }, T.wordsNavHint) : null,
-            h("p", { style: ALIAS.foot }, T.aliasFoot),
-            h("div", { style: ALIAS.form },
+            h("div", { style: ALIAS.divider }),
+            h("div", { style: merge(ALIAS.head, { marginTop: 4, alignItems: "center" }) },
+              h("p", { style: ALIAS.foot }, T.dockFooterHint),
               h("button", {
                 type: "button",
                 style: ALIAS.add,
-                onClick: () => {
-                  // 进设置分区的词库页；分区没挂载就只给指引，不假装已经跳过去。
-                  if (openWordsFromDock()) {
-                    setOpen(false)
-                    setNavHint(false)
-                  } else {
-                    setNavHint(true)
-                  }
-                },
-              }, T.wordsManage))),
+                onClick: openSettings,
+              }, T.dockOpenSettings))),
             // 右下角缩放：拖手柄只改尺寸，位置不动。
             h("div", { style: ALIAS.grip, onPointerDown: (event) => { startGesture(event, "resize") } }, "\u25E2"))
         : null)
@@ -4698,11 +6350,33 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
   exports.PromptBlock = PromptBlock
   exports.WordEditor = WordEditor
   exports.Dialog = Dialog
+  exports.Button = Button
+  exports.Icon = Icon
+  exports.Term = Term
+  exports.StateBlock = StateBlock
+  exports.Notice = Notice
+  exports.PageTip = PageTip
+  exports.PageHead = PageHead
   // 浮窗布局：夹边、默认位置、读回脏数据的回落，都是可以脱离 DOM 断言的行为。
   exports.clampDockRect = clampDockRect
   exports.defaultDockRect = defaultDockRect
   exports.parseDockLayout = parseDockLayout
   // 浮窗整棵组件：只有真正渲染一次，才能发现「定义顺序/初始化顺序」这类单测到不了的问题。
   exports.AliasRow = AliasRow
+  exports.flowSteps = flowSteps
+  exports.deriveActionCard = deriveActionCard
+  exports.formatDiagnostics = formatDiagnostics
+  exports.OverviewPage = OverviewPage
+  exports.PatchesPage = PatchesPage
+  // 阶段四组件与规格导出
+  exports.ModeBlock = ModeBlock
+  exports.ModeCompare = ModeCompare
+  exports.RulesBlock = RulesBlock
+  exports.modeSwitchDialogSpec = modeSwitchDialogSpec
+  exports.ruleDeleteDialogSpec = ruleDeleteDialogSpec
+  exports.recoverRulesDialogSpec = recoverRulesDialogSpec
+  // 阶段五收官组件导出
+  exports.WordsPage = WordsPage
+  exports.aliasStore = aliasStore
   return module.exports
 }})
