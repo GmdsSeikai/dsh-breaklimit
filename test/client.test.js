@@ -1304,23 +1304,19 @@ test('重塑 OverviewPage：4阶段进度流、双栏卡片网格、核心配置
   assert.equal(flowItems[2].props.className, 'current')
   assert.equal(flowItems[3].props.className, 'todo')
 
-  // 2. 验证双栏网格与主行动卡片（section.bkl-action-card）
-  const columnsNode = findAll(tree, n => n.props?.className === 'bkl-columns')[0]
-  assert.equal(Boolean(columnsNode), true, '应渲染双栏网格 bkl-columns')
-
-  const actionCard = findAll(columnsNode, n => n.type === 'section' && String(n.props?.className).includes('bkl-action-card'))[0]
-  assert.equal(Boolean(actionCard), true, '左栏应渲染主行动卡片')
-  const actionBtn = findAll(actionCard, n => n.type === 'button')[0]
+  // 2. 验证通栏 Hero 主行动卡片（section.bkl-hero-card）
+  const heroCard = findAll(tree, n => n.type === 'section' && String(n.props?.className).includes('bkl-hero-card'))[0]
+  assert.equal(Boolean(heroCard), true, '应渲染通栏 Hero 主行动卡片 bkl-hero-card')
+  const actionBtn = findAll(heroCard, n => n.type === 'button')[0]
   actionBtn.props.onClick({ preventDefault() {} })
   assert.equal(actionRan, 'goPatches', '点击主行动卡片按钮应触发 action')
 
-  // 3. 验证首次向导（支持折叠）
-  const guideCard = findAll(columnsNode, n => n.props?.className && String(n.props.className).includes('bkl-card') || n.type === 'section')
-    .find(c => textOf(c).includes('三步走完'))
-  assert.equal(Boolean(guideCard), true, '首次向导卡片应存在')
+  // 3. 验证 1:1 双栏平衡网格（div.bkl-balanced-grid）
+  const gridNode = findAll(tree, n => n.props?.className === 'bkl-balanced-grid')[0]
+  assert.equal(Boolean(gridNode), true, '应渲染双栏平衡网格 bkl-balanced-grid')
 
   // 4. 验证核心配置清单（div.bkl-summary-list，Switch 就地切换）
-  const summaryList = findAll(columnsNode, n => n.props?.className === 'bkl-summary-list')[0]
+  const summaryList = findAll(gridNode, n => n.props?.className === 'bkl-summary-list')[0]
   assert.equal(Boolean(summaryList), true, '应渲染核心配置清单 bkl-summary-list')
   const summaryRows = findAll(summaryList, n => n.props?.className === 'bkl-summary-row')
   assert.equal(summaryRows.length, 4, '配置清单应包含 4 行')
@@ -1331,16 +1327,16 @@ test('重塑 OverviewPage：4阶段进度流、双栏卡片网格、核心配置
   assert.equal(toggledEnabled, false, '点击开关应就地切换')
 
   // 5. 验证右栏环境与权限卡片（div.bkl-status-lines）
-  const statusLines = findAll(columnsNode, n => n.props?.className === 'bkl-status-lines')[0]
+  const statusLines = findAll(gridNode, n => n.props?.className === 'bkl-status-lines')[0]
   assert.equal(Boolean(statusLines), true, '右栏应渲染环境权限行 bkl-status-lines')
 
   // 6. 验证生效时机指南卡片
-  const effectCard = findAll(columnsNode, n => n.type === 'section')
-    .find(c => textOf(c).includes('改动什么时候生效？'))
+  const effectCard = findAll(gridNode, n => n.type === 'section')
+    .find(c => textOf(c).includes('改动生效时机') || textOf(c).includes('改动什么时候生效？'))
   assert.equal(Boolean(effectCard), true, '应渲染生效时机指南卡片')
 
   // 7. 验证技术诊断折叠块（details.bkl-disclosure、一键复制按钮与提示）
-  const disclosure = findAll(columnsNode, n => n.type === 'details' && n.props?.className === 'bkl-disclosure')[0]
+  const disclosure = findAll(gridNode, n => n.type === 'details' && n.props?.className === 'bkl-disclosure')[0]
   assert.equal(Boolean(disclosure), true, '应渲染技术诊断折叠块')
   assert.equal(textOf(disclosure).includes('含本机路径，不含凭据'), true, '应展示不含凭据提示')
   const copyBtn = findAll(disclosure, n => n.type === 'button').find(b => textOf(b).includes('复制诊断信息'))

@@ -531,6 +531,27 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     ".bkl-root .bkl-columns { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 24px; align-items: start; }",
     "@media (max-width: 840px) { .bkl-root .bkl-columns { grid-template-columns: minmax(0, 1fr); } }",
 
+    // 响应式平衡双栏网格
+    ".bkl-root .bkl-balanced-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }",
+    "@media (max-width: 860px) { .bkl-root .bkl-balanced-grid { grid-template-columns: 1fr; } }",
+
+    // 通栏 Hero 主行动卡片
+    ".bkl-root .bkl-hero-card { --tone: var(--dsw-alias-state-business-primary); --toneSoft: var(--dsw-alias-state-business-tertiary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent)); --toneLine: var(--dsw-alias-state-business-secondary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 32%, transparent)); padding: 20px 24px; border: 1px solid var(--toneLine); border-left: 4px solid var(--tone); border-radius: var(--dsw-radius-lg, 12px); position: relative; overflow: hidden; background: linear-gradient(90deg, var(--toneSoft), var(--dsw-alias-bg-layer-1) 45%); display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 20px; }",
+    ".bkl-root .bkl-hero-card.warn { --tone: var(--dsw-alias-state-warn-primary); --toneSoft: var(--dsw-alias-state-warn-tertiary, color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent)); --toneLine: var(--dsw-alias-state-warn-secondary, color-mix(in srgb, var(--dsw-alias-state-warn-primary) 36%, transparent)); }",
+    ".bkl-root .bkl-hero-card.error { --tone: var(--dsw-alias-state-error-primary); --toneSoft: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); --toneLine: var(--dsw-alias-state-error-secondary, color-mix(in srgb, var(--dsw-alias-state-error-primary) 32%, transparent)); }",
+    ".bkl-root .bkl-hero-card.ok { --tone: var(--dsw-alias-state-success-primary); --toneSoft: var(--dsw-alias-state-success-tertiary, color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent)); --toneLine: var(--dsw-alias-state-success-secondary, color-mix(in srgb, var(--dsw-alias-state-success-primary) 32%, transparent)); }",
+    ".bkl-root .bkl-hero-left { display: flex; align-items: center; gap: 16px; min-width: 0; }",
+    ".bkl-root .bkl-hero-icon { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; background: var(--dsw-alias-bg-layer-1); border: 1.5px solid var(--toneLine); color: var(--tone); box-shadow: 0 2px 8px color-mix(in srgb, #000 6%, transparent); }",
+    ".bkl-root .bkl-hero-icon svg { width: 24px; height: 24px; }",
+    ".bkl-root .bkl-hero-texts { display: flex; flex-direction: column; gap: 4px; min-width: 0; }",
+    ".bkl-root .bkl-hero-eyebrow { display: flex; align-items: center; gap: 6px; color: var(--tone); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }",
+    ".bkl-root .bkl-hero-card h2, .bkl-root .bkl-hero-title { font-size: 18px; margin: 0; font-weight: 700; color: var(--dsw-alias-label-primary); letter-spacing: -0.2px; }",
+    ".bkl-root .bkl-hero-card p, .bkl-root .bkl-hero-desc { font-size: 13px; color: var(--dsw-alias-label-secondary); line-height: 1.5; margin: 0; }",
+    ".bkl-root .bkl-hero-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; flex-shrink: 0; max-width: 480px; }",
+    ".bkl-root .bkl-hero-card .bkl-btn-hero, .bkl-root .bkl-hero-right > .bkl-btn-fill { min-height: 38px !important; padding: 8px 18px !important; font-size: 13px !important; font-weight: 600 !important; }",
+    "@media (max-width: 860px) { .bkl-root .bkl-hero-card { flex-direction: column; align-items: flex-start; gap: 16px; } .bkl-root .bkl-hero-right { width: 100%; align-items: flex-start; max-width: 100%; } }",
+    ".bkl-root .bkl-balanced-card { height: 100% !important; }",
+
     // 主行动卡片
     ".bkl-root .bkl-action-card { --tone: var(--dsw-alias-state-business-primary); --toneSoft: var(--dsw-alias-state-business-tertiary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent)); --toneLine: var(--dsw-alias-state-business-secondary, color-mix(in srgb, var(--dsw-alias-state-business-primary) 32%, transparent)); padding: 24px 26px; border: 1px solid var(--toneLine); border-radius: var(--dsw-radius-lg, 12px); position: relative; overflow: hidden; background: linear-gradient(160deg, var(--toneSoft), var(--dsw-alias-bg-layer-1) 62%); }",
     ".bkl-root .bkl-action-card::before { content: \"\"; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tone); }",
@@ -1243,11 +1264,11 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
       // 阶段三：概览与补丁扩展
       overviewFlowLabel: "补丁生效进度",
-      overviewConfigTitle: "你的使用配置",
+      overviewConfigTitle: "核心配置与接管",
       overviewConfigDesc: "这几项互相独立，按需要调整。",
       overviewEnvTitle: "环境与权限",
       overviewEnvDesc: "提示词模式决定附加指令与执行层上限，不能代替沙箱权限设置。",
-      overviewEffectTitle: "改动什么时候生效？",
+      overviewEffectTitle: "改动生效时机与技术诊断",
       overviewEffectPatches: "源码补丁",
       overviewEffectPatchesDesc: "应用后重启宿主",
       overviewEffectPrompt: "提示词",
@@ -1977,11 +1998,11 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
 
       // Phase 3: Overview and patches extension
       overviewFlowLabel: "Patch application progress",
-      overviewConfigTitle: "Your configuration",
+      overviewConfigTitle: "Core configuration and takeover",
       overviewConfigDesc: "These settings are independent; adjust as needed.",
       overviewEnvTitle: "Environment and permissions",
       overviewEnvDesc: "Prompt mode dictates instructions and execution limits; it does not replace sandbox settings.",
-      overviewEffectTitle: "When do changes take effect?",
+      overviewEffectTitle: "When changes take effect & technical diagnostics",
       overviewEffectPatches: "Source patches",
       overviewEffectPatchesDesc: "Restart host after applying",
       overviewEffectPrompt: "Prompt",
@@ -2981,12 +3002,13 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
    * 不可点的按钮用 aria-disabled 而不是 disabled：保留键盘焦点，读屏能通过
    * aria-describedby 读到「为什么不能点」。
    */
-  function Button({ kind = "plain", size, off, reason, describedBy, label, expanded, controls, buttonRef, autofocus, onClick, children }) {
+  function Button({ kind = "plain", size, off, reason, describedBy, label, expanded, controls, buttonRef, autofocus, className = "", style, onClick, children }) {
     const filled = kind === "primary" || kind === "danger"
+    const classes = ["bkl-btn", filled ? "bkl-btn-fill" : "bkl-btn-plain", className].filter(Boolean).join(" ")
     return h("button", {
       type: "button",
       ref: buttonRef,
-      className: `bkl-btn ${filled ? "bkl-btn-fill" : "bkl-btn-plain"}`,
+      className: classes,
       // 弹窗里指定初始焦点用；Dialog 打开时优先找这个标记。
       "data-bkl-autofocus": autofocus === true ? "true" : undefined,
       style: merge(
@@ -2997,6 +3019,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
         kind === "quietDanger" && S.btnQuietDanger,
         size === "small" && S.btnSmall,
         off && S.btnOff,
+        style,
       ),
       "aria-disabled": off ? "true" : undefined,
       "aria-describedby": describedBy,
@@ -3039,9 +3062,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
     return h("span", { style: merge(S.tag, color && { color, border: "0.5px solid currentColor" }) }, children)
   }
 
-  function Card({ className, title, titleId, desc, descId, aside, children }) {
+  function Card({ className, title, titleId, desc, descId, aside, style, children }) {
     const cardClass = className ? `bkl-card ${className}` : "bkl-card"
-    return h("section", { className: cardClass, style: S.card, "aria-labelledby": title === undefined ? undefined : titleId },
+    return h("section", { className: cardClass, style: merge(S.card, style), "aria-labelledby": title === undefined ? undefined : titleId },
       title === undefined
         ? null
         : h("div", { style: S.cardHead },
@@ -3659,10 +3682,10 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
       : words?.entries?.length === 0 ? T.wordsSummaryEmpty : T.wordsSummaryCount(words?.entries?.length ?? 0)
 
     return h("div", { style: S.panel },
-      // 1. 顶部调用 PageHead（page: "overview"）
+      // 1. 顶部调用 PageHead（从这里开始，page: "overview"）
       h(PageHead, { page: "overview", title: T.pageOverviewTitle, desc: T.pageOverviewDesc, titleId: "bkl-page-overview" }),
 
-      // 2. 渲染 4 阶段进度条（ol.bkl-flow）
+      // 2. 第一层：4 阶段进度条（ol.bkl-flow，全宽）
       h("ol", { className: "bkl-flow", "aria-label": T.overviewFlowLabel },
         steps.map(([title, state, sub], index) => {
           const isCurrent = state === "current" || state === "blocked"
@@ -3674,42 +3697,37 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
               h("span", { className: "bkl-sub" }, sub)))
         })),
 
-      // 3. 渲染双栏响应式网格（div.bkl-columns）
-      h("div", { className: "bkl-columns" },
-        // 左栏
-        h("div", { style: { display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 } },
-          // a. 主行动卡片（section.bkl-action-card）
-          h("section", { className: `bkl-action-card${actionToneClass}`, "aria-labelledby": "bkl-action-title" },
-            h("div", { className: "bkl-action-eyebrow" },
-              h("span", { className: "bkl-icon-wrap" }, h(Icon, { name: actionCard.icon, size: 14 })),
-              actionCard.label),
-            h("h2", { id: "bkl-action-title" }, actionCard.title),
-            h("p", null, actionCard.body),
-            h("div", { className: "bkl-action-actions" },
-              h(Button, {
-                kind: "primary",
-                off: busy,
-                reason: T.whyBusy,
-                onClick: () => { onRun(actionCard.action) },
-              }, actionCard.button)),
-            nextNotice ?? null),
-
-          // 重启通知展示
+      // 3. 第二层：通栏 Hero 主行动卡片（全宽横贯，左侧图标+文案，右侧按钮与重启通知）
+      h("section", { className: `bkl-hero-card${actionToneClass}`, "aria-labelledby": "bkl-action-title" },
+        h("div", { className: "bkl-hero-left" },
+          h("div", { className: "bkl-hero-icon", "aria-hidden": "true" },
+            h(Icon, { name: actionCard.icon, size: 24 })),
+          h("div", { className: "bkl-hero-texts" },
+            h("div", { className: "bkl-hero-eyebrow" }, actionCard.label),
+            h("h2", { id: "bkl-action-title", className: "bkl-hero-title" }, actionCard.title),
+            h("p", { className: "bkl-hero-desc" }, actionCard.body))),
+        h("div", { className: "bkl-hero-right" },
+          h(Button, {
+            kind: "primary",
+            className: "bkl-btn-hero",
+            off: busy,
+            reason: T.whyBusy,
+            onClick: () => { onRun(actionCard.action) },
+          }, actionCard.button),
           restart !== null ? restartView : null,
+          nextNotice ?? null)),
 
-          // b. 首次向导（若初次使用，支持折叠）
+      // 4. 第三层：1:1 双栏平衡网格（左右高度约 340px 严格对齐）
+      h("div", { className: "bkl-balanced-grid" },
+        // 左栏：核心配置与接管卡片（4 项配置：提示词模式、长期规则、目标词库、破限接管 Switch 就地开关）
+        h("div", { style: { display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 } },
           h(Card, {
-            title: T.stepsTitle, titleId: "bkl-steps-title", desc: T.stepsDesc,
-            aside: h(Button, {
-              kind: "quiet", size: "small",
-              label: guideOpen ? T.guideHide : T.guideShow,
-              onClick: onToggleGuide,
-            }, guideOpen ? T.guideHide : T.guideShow),
+            className: "bkl-balanced-card",
+            title: T.overviewConfigTitle,
+            titleId: "bkl-config-title",
+            desc: T.overviewConfigDesc,
+            style: { height: "100%" },
           },
-            guideOpen ? h(StepList, { items: stepItems(f), onGo }) : null),
-
-          // c. 核心配置清单（div.bkl-summary-list，包含提示词模式、长期规则、目标词库、破限接管开关 Switch，支持就地切换）
-          h(Card, { title: T.overviewConfigTitle, titleId: "bkl-config-title", desc: T.overviewConfigDesc },
             h("div", { className: "bkl-summary-list" },
               // 1) 提示词模式
               h("div", { className: "bkl-summary-row" },
@@ -3763,9 +3781,9 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
                     : warning?.code === "default_policy_never" ? T.warnPolicyNever : T.warnOther(warning?.code ?? "")))),
               h("p", { style: S.small }, T.warnNext))),
 
-        // 右栏
+        // 右栏：运行环境与权限卡片 + 改动生效时机与技术诊断卡片（带一键脱敏复制与提示）
         h("div", { style: { display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 } },
-          // a. 环境与权限卡片（div.bkl-status-lines，包含宿主版本、提示词模式、实际权限、预检状态、宿主路径）
+          // a. 运行环境与权限卡片（包含宿主版本、提示词模式、实际权限、预检状态、宿主路径）
           h(Card, { title: T.overviewEnvTitle, titleId: "bkl-status-title" },
             h("div", { className: "bkl-status-lines" },
               h("div", null,
@@ -3799,7 +3817,7 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
             }, rootHint),
             h("p", { style: merge(S.small, { marginTop: "10px", color: "var(--dsw-alias-label-tertiary)" }) }, T.overviewEnvDesc)),
 
-          // b. 生效时机指南卡片（展示补丁/提示词/规则/词库四项改动的生效时机）
+          // b. 改动生效时机与技术诊断卡片（带一键脱敏复制与提示）
           h(Card, { title: T.overviewEffectTitle, titleId: "bkl-timing-title" },
             h("div", { style: { display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 14px", fontSize: "12px" } },
               h("span", { style: { color: "var(--dsw-alias-label-tertiary)", fontWeight: 550 } }, T.overviewEffectPatches),
@@ -3809,28 +3827,26 @@ window.__ModuleLoader__.load({ id: "rumo-dsh-breaklimit", factory: (require) => 
               h("span", { style: { color: "var(--dsw-alias-label-tertiary)", fontWeight: 550 } }, T.overviewEffectRules),
               h("span", { style: { color: "var(--dsw-alias-label-primary)" } }, T.overviewEffectRulesDesc),
               h("span", { style: { color: "var(--dsw-alias-label-tertiary)", fontWeight: 550 } }, T.overviewEffectWords),
-              h("span", { style: { color: "var(--dsw-alias-label-primary)" } }, T.overviewEffectWordsDesc))),
-
-          // c. 技术诊断折叠块（details.bkl-disclosure，调用 formatDiagnostics(status, f) 展示脱敏文本，包含一键复制按钮与「含本机路径，不含凭据」提示）
-          h("details", { className: "bkl-disclosure" },
-            h("summary", null, T.overviewDiagTitle),
-            h("pre", { style: merge(S.codeBlock, { whiteSpace: "pre-wrap", marginTop: "10px", fontSize: "11px", lineHeight: 1.6 }) }, diagText),
-            h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "10px", flexWrap: "wrap" } },
-              h("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)" } }, T.overviewDiagNote),
-              h(Button, {
-                size: "small",
-                kind: "quiet",
-                onClick: () => {
-                  if (typeof onCopy === "function") {
-                    onCopy(diagText)
-                  } else if (typeof navigator !== "undefined" && navigator.clipboard) {
-                    void navigator.clipboard.writeText(diagText)
-                  }
+              h("span", { style: { color: "var(--dsw-alias-label-primary)" } }, T.overviewEffectWordsDesc)),
+            h("details", { className: "bkl-disclosure", style: { marginTop: "12px" } },
+              h("summary", null, T.overviewDiagTitle),
+              h("pre", { style: merge(S.codeBlock, { whiteSpace: "pre-wrap", marginTop: "10px", fontSize: "11px", lineHeight: 1.6 }) }, diagText),
+              h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "10px", flexWrap: "wrap" } },
+                h("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)" } }, T.overviewDiagNote),
+                h(Button, {
+                  size: "small",
+                  kind: "quiet",
+                  onClick: () => {
+                    if (typeof onCopy === "function") {
+                      onCopy(diagText)
+                    } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+                      void navigator.clipboard.writeText(diagText)
+                    }
+                  },
                 },
-              },
-                h(Icon, { name: "copy", size: 13 }),
-                " ",
-                T.overviewDiagCopy))))))
+                  h(Icon, { name: "copy", size: 13 }),
+                  " ",
+                  T.overviewDiagCopy)))))))
   }
 
   // ---- 补丁 -----------------------------------------------------------------

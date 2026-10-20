@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>概览页布局重组原型 · 高度对称平衡方案</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --card-sub: #f1f5f9;
+      --text: #0f172a;
+      --text-sub: #475569;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --border-sub: #cbd5e1;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --accent-line: #bfdbfe;
+      --ok: #16a34a;
+      --ok-soft: #f0fdf4;
+      --ok-line: #bbf7d0;
+      --warn: #d97706;
+      --warn-soft: #fffbeb;
+      --warn-line: #fde68a;
+      --error: #dc2626;
+      --error-soft: #fef2f2;
+      --error-line: #fecaca;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+      --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+      --radius: 10px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b0f17;
+        --card-bg: #151d2a;
+        --card-sub: #1e293b;
+        --text: #f8fafc;
+        --text-sub: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border: #243042;
+        --border-sub: #334155;
+        --accent: #3b82f6;
+        --accent-soft: #172554;
+        --accent-line: #1e3a8a;
+        --ok: #22c55e;
+        --ok-soft: #052e16;
+        --ok-line: #14532d;
+        --warn: #f59e0b;
+        --warn-soft: #451a03;
+        --warn-line: #78350f;
+        --error: #ef4444;
+        --error-soft: #450a0a;
+        --error-line: #7f1d1d;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 6px rgba(0, 0, 0, 0.4);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* 原型场景控制器工具条 */
+    .prototype-bar {
+      width: 100%;
+      max-width: 1060px;
+      margin-bottom: 24px;
+      padding: 12px 18px;
+      background: var(--card-bg);
+      border: 1px solid var(--accent-line);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .prototype-bar span { font-size: 13px; font-weight: 600; color: var(--accent); }
+    .prototype-bar .tabs { display: flex; gap: 8px; }
+    .prototype-bar button {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card-sub);
+      color: var(--text-sub);
+      font-size: 12px;
+      font-weight: 550;
+      cursor: pointer;
+      transition: all 120ms ease;
+    }
+    .prototype-bar button.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* 主容器 */
+    .bkl-overview-wrap {
+      width: 100%;
+      max-width: 1060px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* 顶栏 */
+    .page-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .page-head h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .page-head p {
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+
+    /* 4 阶段进度条 */
+    .flow-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow-sm);
+      transition: border-color 140ms ease;
+    }
+    .flow-step.done { border-color: var(--ok-line); }
+    .flow-step.current { border-color: var(--accent-line); background: linear-gradient(90deg, var(--accent-soft), var(--card-bg) 60%); }
+    .flow-step.blocked { border-color: var(--error-line); background: var(--error-soft); }
+    .flow-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      background: var(--card-sub);
+      color: var(--text-muted);
+    }
+    .flow-step.done .flow-num { background: var(--ok); color: #fff; }
+    .flow-step.current .flow-num { background: var(--accent); color: #fff; }
+    .flow-step.blocked .flow-num { background: var(--error); color: #fff; }
+    .flow-info { min-width: 0; display: flex; flex-direction: column; }
+    .flow-info strong { font-size: 13px; color: var(--text); }
+    .flow-info span { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* =========================================================================
+     * 核心创新：全宽通栏主行动卡片 (Hero Action Card)
+     * ========================================================================= */
+    .hero-action-card {
+      padding: 20px 24px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      transition: all 160ms ease;
+    }
+    .hero-action-card.accent {
+      border-left-color: var(--accent);
+      background: linear-gradient(90deg, var(--accent-soft), var(--card-bg) 40%);
+    }
+    .hero-action-card.warn {
+      border-left-color: var(--warn);
+      background: linear-gradient(90deg, var(--warn-soft), var(--card-bg) 40%);
+    }
+    .hero-action-card.error {
+      border-left-color: var(--error);
+      background: linear-gradient(90deg, var(--error-soft), var(--card-bg) 40%);
+    }
+    .hero-action-card.ok {
+      border-left-color: var(--ok);
+      background: linear-gradient(90deg, var(--ok-soft), var(--card-bg) 40%);
+    }
+
+    .hero-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+    .hero-icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      box-shadow: var(--shadow-sm);
+    }
+    .hero-action-card.error .hero-icon-box { color: var(--error); border-color: var(--error-line); }
+    .hero-action-card.warn .hero-icon-box { color: var(--warn); border-color: var(--warn-line); }
+    .hero-action-card.ok .hero-icon-box { color: var(--ok); border-color: var(--ok-line); }
+
+    .hero-texts {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .hero-eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hero-action-card.error .hero-eyebrow { color: var(--error); }
+    .hero-action-card.warn .hero-eyebrow { color: var(--warn); }
+    .hero-action-card.ok .hero-eyebrow { color: var(--ok); }
+
+    .hero-title {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.2px;
+    }
+    .hero-desc {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-sub);
+      line-height: 1.45;
+    }
+
+    .hero-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .btn-hero {
+      padding: 10px 20px;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 120ms ease;
+    }
+    .btn-hero:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .hero-action-card.error .btn-hero { background: var(--error); }
+    .hero-action-card.warn .btn-hero { background: var(--warn); }
+    .hero-action-card.ok .btn-hero { background: var(--ok); }
+
+    /* =========================================================================
+     * 下层 1:1 双栏平衡网格 (Balanced 1:1 Columns)
+     * ========================================================================= */
+    .balanced-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: stretch; /* 强制两栏高度拉齐 */
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .card-head {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: var(--card-bg);
+    }
+    .card-head h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .card-head span.badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--card-sub);
+      color: var(--text-sub);
+      font-weight: 600;
+    }
+    .card-body {
+      padding: 16px 18px;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* 左栏：核心配置清单行 */
+    .summary-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: -6px 0;
+    }
+    .summary-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--card-sub);
+      color: var(--accent);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    .summary-main {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .summary-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .summary-main strong {
+      font-size: 13px;
+      color: var(--text);
+    }
+    .summary-main p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-sub);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .btn-action {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-sub);
+      font-size: 12px;
+      font-weight: 550;
+      cursor: pointer;
+      transition: all 120ms ease;
+      white-space: nowrap;
+    }
+    .btn-action:hover {
+      background: var(--card-sub);
+      color: var(--text);
+      border-color: var(--border-sub);
+    }
+
+    /* 开关控件 Switch */
+    .switch-ui {
+      width: 38px;
+      height: 22px;
+      border-radius: 11px;
+      background: var(--border-sub);
+      position: relative;
+      cursor: pointer;
+      transition: background 160ms ease;
+      border: none;
+      padding: 0;
+    }
+    .switch-ui.on { background: var(--accent); }
+    .switch-knob {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 140ms ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .switch-ui.on .switch-knob { transform: translateX(16px); }
+
+    /* 右栏：环境与权限 */
+    .status-table {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      font-size: 12px;
+    }
+    .status-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .status-key { color: var(--text-muted); font-weight: 500; }
+    .status-val { font-family: var(--font-mono); font-size: 12px; color: var(--text); }
+    .pill-tag {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--card-sub);
+      color: var(--text-sub);
+      border: 1px solid var(--border);
+    }
+    .pill-tag.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
+    .pill-tag.ok { background: var(--ok-soft); color: var(--ok); border-color: var(--ok-line); }
+    .pill-tag.accent { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
+
+    .code-box {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--card-sub);
+      border: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-sub);
+      word-break: break-all;
+    }
+
+    /* 右栏下部：生效指南与技术诊断 */
+    .timing-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px 12px;
+      font-size: 12px;
+    }
+    .timing-key { color: var(--text-muted); font-weight: 600; }
+    .timing-val { color: var(--text); }
+
+    details.disclosure {
+      margin-top: 6px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: var(--card-sub);
+      border: 1px solid var(--border);
+      font-size: 12px;
+    }
+    details.disclosure summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text-sub);
+      user-select: none;
+    }
+    details.disclosure pre {
+      margin: 8px 0 0;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--text-sub);
+      white-space: pre-wrap;
+    }
+
+    /* 响应式收折 */
+    @media (max-width: 860px) {
+      .hero-action-card { flex-direction: column; align-items: flex-start; }
+      .hero-right { width: 100%; justify-content: flex-end; }
+      .balanced-grid { grid-template-columns: 1fr; }
+      .flow-steps { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 原型场景切换控制器 -->
+  <div class="prototype-bar">
+    <span>🔍 概览页布局重组原型 · 场景模拟走查</span>
+    <div class="tabs">
+      <button class="active" onclick="switchScenario('pending')">场景 1：待应用补丁（最常见）</button>
+      <button onclick="switchScenario('blocked')">场景 2：预检阻断（红色预警）</button>
+      <button onclick="switchScenario('ready')">场景 3：已就位就绪（全部就绪）</button>
+      <button onclick="switchScenario('noroot')">场景 4：未配目录（初始状态）</button>
+    </div>
+  </div>
+
+  <div class="bkl-overview-wrap">
+    
+    <!-- 1. 顶栏标题 -->
+    <header class="page-head">
+      <div>
+        <h1>从这里开始</h1>
+        <p>先看当前状态，再完成需要做的那一步。</p>
+      </div>
+      <div>
+        <button class="btn-action" style="padding: 7px 14px;">↻ 重新检查状态</button>
+      </div>
+    </header>
+
+    <!-- 2. 4 阶段进度流 -->
+    <ol class="flow-steps" id="flow-steps-container">
+      <!-- 动态填充 -->
+    </ol>
+
+    <!-- =========================================================================
+     * 核心创新：全宽通栏主行动卡片 (Hero Action Card)
+     * ========================================================================= -->
+    <section class="hero-action-card accent" id="hero-card">
+      <div class="hero-left">
+        <div class="hero-icon-box" id="hero-icon">⚡</div>
+        <div class="hero-texts">
+          <div class="hero-eyebrow" id="hero-eyebrow">还差一步 · 待写入补丁</div>
+          <h2 class="hero-title" id="hero-title">还有 9 个文件等待写入宿主</h2>
+          <p class="hero-desc" id="hero-desc">你挑选的破限补丁改动尚未生效。点击下方按钮前往补丁页进行集中检查并统一写入。</p>
+        </div>
+      </div>
+      <div class="hero-right">
+        <button class="btn-hero" id="hero-btn">检查并应用补丁 ➔</button>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+     * 1:1 双栏平衡对齐网格 (左右高度严格平齐)
+     * ========================================================================= -->
+    <div class="balanced-grid">
+      
+      <!-- 左栏：核心配置与接管 (Card) -->
+      <div class="card">
+        <div class="card-head">
+          <h3>核心配置与接管</h3>
+          <span class="badge">4 项配置</span>
+        </div>
+        <div class="card-body">
+          <div class="summary-list">
+            
+            <!-- 1) 提示词模式 -->
+            <div class="summary-row">
+              <div class="summary-icon">📝</div>
+              <div class="summary-main">
+                <div class="summary-label">提示词模式</div>
+                <strong>推荐模式</strong>
+                <p>使用内置共用正文 · 命令超时 20 分钟</p>
+              </div>
+              <button class="btn-action">调整模式</button>
+            </div>
+
+            <!-- 2) 长期规则 -->
+            <div class="summary-row">
+              <div class="summary-icon">📜</div>
+              <div class="summary-main">
+                <div class="summary-label">长期规则</div>
+                <strong>coding-style（激活中）</strong>
+                <p>已激活并写入 AGENTS.md 指令文件</p>
+              </div>
+              <button class="btn-action">管理规则</button>
+            </div>
+
+            <!-- 3) 目标词库 -->
+            <div class="summary-row">
+              <div class="summary-icon">📚</div>
+              <div class="summary-main">
+                <div class="summary-label">目标词库</div>
+                <strong>已保存 12 / 100 条</strong>
+                <p>提交给模型前自动脱敏敏感原词</p>
+              </div>
+              <button class="btn-action">管理词库</button>
+            </div>
+
+            <!-- 4) 运行时接管开关 -->
+            <div class="summary-row">
+              <div class="summary-icon">⚡</div>
+              <div class="summary-main">
+                <div class="summary-label">本次运行接管</div>
+                <strong>已开启接管</strong>
+                <p>插件在本次运行中介入提示词与安全审批</p>
+              </div>
+              <button class="switch-ui on" onclick="this.classList.toggle('on')">
+                <span class="switch-knob"></span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- 右栏：运行环境与生效时机 (Card 组合) -->
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        
+        <!-- 卡片 1：运行环境与权限 -->
+        <div class="card">
+          <div class="card-head">
+            <h3>运行环境与权限</h3>
+            <span class="badge">宿主事实</span>
+          </div>
+          <div class="card-body" style="padding: 14px 18px; gap: 10px;">
+            <div class="status-table">
+              <div class="status-line">
+                <span class="status-key">宿主版本</span>
+                <span class="status-val">0.2.1-rc.2 · 687f282e86</span>
+              </div>
+              <div class="status-line">
+                <span class="status-key">提示词模式</span>
+                <span class="pill-tag accent">推荐模式</span>
+              </div>
+              <div class="status-line">
+                <span class="status-key">实际执行权限</span>
+                <span class="pill-tag warn">完全权限 (Full Access)</span>
+              </div>
+              <div class="status-line">
+                <span class="status-key">补丁预检结果</span>
+                <span class="pill-tag ok" id="env-preflight-pill">预检通过 · 待写入 9 个文件</span>
+              </div>
+            </div>
+            <div class="code-box">
+              源码根目录: …/deepseek-harness
+            </div>
+          </div>
+        </div>
+
+        <!-- 卡片 2：生效指南与技术诊断 -->
+        <div class="card">
+          <div class="card-head">
+            <h3>改动生效时机与诊断</h3>
+            <button class="btn-action" style="padding: 2px 8px; font-size: 11px;" onclick="alert('诊断信息已复制到剪贴板（已严格脱敏，不含凭据）')">复制诊断</button>
+          </div>
+          <div class="card-body" style="padding: 14px 18px; gap: 12px;">
+            <div class="timing-grid">
+              <span class="timing-key">源码补丁</span>
+              <span class="timing-val">重启宿主程序后加载生效</span>
+              <span class="timing-key">提示词模式</span>
+              <span class="timing-val">下一轮模型对话立即生效</span>
+              <span class="timing-key">长期规则</span>
+              <span class="timing-val">点击激活后写入对应文件</span>
+              <span class="timing-key">目标词库</span>
+              <span class="timing-val">保存后新开会话即可生效</span>
+            </div>
+
+            <details class="disclosure">
+              <summary>技术诊断信息（已脱敏）</summary>
+              <pre>宿主提交：687f282e8625
+源码根目录：…/deepseek-harness
+插件 HTTP：已挂载
+规则清单：可正常读取 (version: 2)
+并发锁：空闲可用
+已应用记录：9 个文件
+运行行为未独立验证</pre>
+            </details>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    const scenarios = {
+      pending: {
+        flow: [
+          { title: "配置宿主目录", state: "done", sub: "已找到宿主源码" },
+          { title: "选择补丁", state: "done", sub: "已选 4 条改动" },
+          { title: "检查并应用", state: "current", sub: "待写入 9 个文件" },
+          { title: "重启宿主", state: "todo", sub: "待应用后重启" }
+        ],
+        heroTone: "accent",
+        icon: "⚡",
+        eyebrow: "还差一步 · 待写入补丁",
+        title: "还有 9 个文件等待写入宿主",
+        desc: "你挑选的破限补丁改动尚未生效。点击右侧按钮前往补丁页进行集中检查并统一写入。",
+        btn: "检查并应用补丁 ➔",
+        preText: "预检通过 · 待写入 9 个文件",
+        preTone: "accent"
+      },
+      blocked: {
+        flow: [
+          { title: "配置宿主目录", state: "done", sub: "已找到宿主源码" },
+          { title: "选择补丁", state: "done", sub: "已选 4 条改动" },
+          { title: "检查并应用", state: "blocked", sub: "预检未通过，未写入" },
+          { title: "重启宿主", state: "todo", sub: "待排除阻断" }
+        ],
+        heroTone: "error",
+        icon: "⚠️",
+        eyebrow: "安全阻断 · 预检未通过",
+        title: "宿主源码有 1 处与预期不符",
+        desc: "为防止改乱宿主，插件已完全阻断写入。宿主磁盘未被修改。请前往补丁页查看差异位置与建议。",
+        btn: "查看阻断原因 ➔",
+        preText: "阻断 · 1 处哈希不符",
+        preTone: "warn"
+      },
+      ready: {
+        flow: [
+          { title: "配置宿主目录", state: "done", sub: "已找到宿主源码" },
+          { title: "选择补丁", state: "done", sub: "已选 4 条改动" },
+          { title: "检查并应用", state: "done", sub: "已写入 9 个文件" },
+          { title: "重启宿主", state: "done", sub: "补丁已全部就绪" }
+        ],
+        heroTone: "ok",
+        icon: "✓",
+        eyebrow: "运行就绪 · 补丁已就位",
+        title: "破限补丁已就绪并生效",
+        desc: "宿主源码文件已写入补丁且校验一致。如果刚完成重启，你现在可以直接去会话中享受宽松上下文。",
+        btn: "进入会话测试 ➔",
+        preText: "全部就绪 (已应用 9 个文件)",
+        preTone: "ok"
+      },
+      noroot: {
+        flow: [
+          { title: "配置宿主目录", state: "current", sub: "告诉插件源码在哪" },
+          { title: "选择补丁", state: "todo", sub: "未配置目录" },
+          { title: "检查并应用", state: "todo", sub: "未配置目录" },
+          { title: "重启宿主", state: "todo", sub: "未配置目录" }
+        ],
+        heroTone: "warn",
+        icon: "📁",
+        eyebrow: "起步阶段 · 缺少宿主根",
+        title: "请先配置 DeepSeek Harness 源码目录",
+        desc: "插件需要知道宿主放在哪才能定位改动目标。在启动终端里配置环境变量 DSH_BREAKLIMIT_HOST_ROOT 后重启。",
+        btn: "查看配置指引 ➔",
+        preText: "未配置宿主目录",
+        preTone: "warn"
+      }
+    };
+
+    function renderFlow(steps) {
+      const c = document.getElementById("flow-steps-container");
+      c.innerHTML = steps.map((s, i) => {
+        const icon = s.state === "done" ? "✓" : s.state === "blocked" ? "!" : String(i + 1);
+        return `
+          <li class="flow-step ${s.state}">
+            <span class="flow-num">${icon}</span>
+            <div class="flow-info">
+              <strong>${s.title}</strong>
+              <span>${s.sub}</span>
+            </div>
+          </li>
+        `;
+      }).join("");
+    }
+
+    function switchScenario(key) {
+      const data = scenarios[key];
+      if (!data) return;
+
+      // 切换按钮高亮
+      document.querySelectorAll(".prototype-bar button").forEach(b => b.classList.remove("active"));
+      event.target.classList.add("active");
+
+      // 渲染流程
+      renderFlow(data.flow);
+
+      // 渲染 Hero 卡片
+      const card = document.getElementById("hero-card");
+      card.className = `hero-action-card ${data.heroTone}`;
+      document.getElementById("hero-icon").textContent = data.icon;
+      document.getElementById("hero-eyebrow").textContent = data.eyebrow;
+      document.getElementById("hero-title").textContent = data.title;
+      document.getElementById("hero-desc").textContent = data.desc;
+      document.getElementById("hero-btn").textContent = data.btn;
+
+      // 渲染预检胶囊
+      const pill = document.getElementById("env-preflight-pill");
+      pill.textContent = data.preText;
+      pill.className = `pill-tag ${data.preTone}`;
+    }
+
+    // 初始化默认场景
+    renderFlow(scenarios.pending.flow);
+  </script>
+</body>
+</html>
